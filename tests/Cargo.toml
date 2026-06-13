@@ -1,0 +1,43 @@
+[package]
+name = "tauri-typed-ipc-tests"
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ttipc_tests"
+
+[dependencies]
+ttipc = { package = "tauri-typed-ipc", path = "../tauri-typed-ipc", features = ["export"] }
+serde.workspace = true
+serde_json.workspace = true
+specta = { workspace = true, features = ["derive"] }
+tauri = { workspace = true, features = ["test"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+divan.workspace = true
+insta.workspace = true
+tempfile.workspace = true
+trybuild.workspace = true
+
+[[bench]]
+name = "dispatch"
+harness = false
+
+[[bench]]
+name = "ipc"
+harness = false
+
+[[bench]]
+name = "bindings"
+harness = false
+
+[[bench]]
+name = "events"
+harness = false
+
+[[bench]]
+name = "errors"
+harness = false

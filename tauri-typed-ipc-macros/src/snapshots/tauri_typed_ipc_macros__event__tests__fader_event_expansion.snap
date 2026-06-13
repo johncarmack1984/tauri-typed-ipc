@@ -1,0 +1,91 @@
+---
+source: tauri-typed-ipc-macros/src/event.rs
+expression: "prettyplease::unparse(&file)"
+---
+impl FaderEvent {
+    /// Emit this event to all targets through the given emitter
+    /// (an `AppHandle`, window, or webview). The wire name is the
+    /// derive's; the payload is the variant's fields.
+    pub fn emit<R, E>(
+        &self,
+        emitter: &E,
+    ) -> ::tauri_typed_ipc::__private::tauri::Result<()>
+    where
+        R: ::tauri_typed_ipc::__private::tauri::Runtime,
+        E: ::tauri_typed_ipc::__private::tauri::Emitter<R>,
+    {
+        match self {
+            FaderEvent::Changed { channel, value } => {
+                #[derive(
+                    ::tauri_typed_ipc::__private::serde::Serialize,
+                    ::core::clone::Clone
+                )]
+                #[serde(crate = "::tauri_typed_ipc::__private::serde")]
+                struct Payload {
+                    channel: u16,
+                    value: u8,
+                }
+                ::tauri_typed_ipc::__private::tauri::Emitter::emit(
+                    emitter,
+                    "fader:changed",
+                    Payload {
+                        channel: ::core::clone::Clone::clone(channel),
+                        value: ::core::clone::Clone::clone(value),
+                    },
+                )
+            }
+        }
+    }
+    /// Emit this event to a single `target` (a window or webview
+    /// label, or an `EventTarget`) through the given emitter, so
+    /// only listeners on that target receive it. Same wire name
+    /// and payload as [`Self::emit`].
+    pub fn emit_to<R, E, I>(
+        &self,
+        emitter: &E,
+        target: I,
+    ) -> ::tauri_typed_ipc::__private::tauri::Result<()>
+    where
+        R: ::tauri_typed_ipc::__private::tauri::Runtime,
+        E: ::tauri_typed_ipc::__private::tauri::Emitter<R>,
+        I: ::core::convert::Into<::tauri_typed_ipc::__private::tauri::EventTarget>,
+    {
+        match self {
+            FaderEvent::Changed { channel, value } => {
+                #[derive(
+                    ::tauri_typed_ipc::__private::serde::Serialize,
+                    ::core::clone::Clone
+                )]
+                #[serde(crate = "::tauri_typed_ipc::__private::serde")]
+                struct Payload {
+                    channel: u16,
+                    value: u8,
+                }
+                ::tauri_typed_ipc::__private::tauri::Emitter::emit_to(
+                    emitter,
+                    target,
+                    "fader:changed",
+                    Payload {
+                        channel: ::core::clone::Clone::clone(channel),
+                        value: ::core::clone::Clone::clone(value),
+                    },
+                )
+            }
+        }
+    }
+}
+impl ::tauri_typed_ipc::EventSet for FaderEvent {
+    const GROUP: &'static str = "fader";
+    const NAME: &'static str = "FaderEvent";
+    fn events(
+        types: &mut ::tauri_typed_ipc::__private::specta::Types,
+    ) -> ::std::vec::Vec<::tauri_typed_ipc::EventType> {
+        ::std::vec![
+            ::tauri_typed_ipc::EventType { variant : "changed", name : "fader:changed",
+            fields : ::std::vec![("channel", < u16 as
+            ::tauri_typed_ipc::__private::specta::Type > ::definition(types)), ("value",
+            < u8 as ::tauri_typed_ipc::__private::specta::Type > ::definition(types)),],
+            data : ::core::option::Option::None, },
+        ]
+    }
+}

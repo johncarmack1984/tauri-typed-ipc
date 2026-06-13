@@ -1,0 +1,5 @@
+error: duplicate injected parameter: only one AppHandle per procedure
+ --> tests/compile_fail/duplicate_injection.rs:3:49
+  |
+3 |     fn set(&self, app: tauri::AppHandle, again: tauri::AppHandle, value: u8);
+  |                                                 ^^^^^^^^^^^^^^^^

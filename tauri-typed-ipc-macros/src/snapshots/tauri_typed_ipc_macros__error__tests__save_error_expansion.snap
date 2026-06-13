@@ -1,0 +1,39 @@
+---
+source: tauri-typed-ipc-macros/src/error.rs
+expression: "prettyplease::unparse(&file)"
+---
+impl ::tauri_typed_ipc::__private::serde::Serialize for SaveError {
+    fn serialize<S>(&self, serializer: S) -> ::core::result::Result<S::Ok, S::Error>
+    where
+        S: ::tauri_typed_ipc::__private::serde::Serializer,
+    {
+        let tag: &'static str = match self {
+            SaveError::Io(..) => "io",
+            SaveError::Locked => "locked",
+        };
+        let mut state = ::tauri_typed_ipc::__private::serde::Serializer::serialize_struct(
+            serializer,
+            "SaveError",
+            2,
+        )?;
+        ::tauri_typed_ipc::__private::serde::ser::SerializeStruct::serialize_field(
+            &mut state,
+            "type",
+            tag,
+        )?;
+        ::tauri_typed_ipc::__private::serde::ser::SerializeStruct::serialize_field(
+            &mut state,
+            "message",
+            &::std::string::ToString::to_string(self),
+        )?;
+        ::tauri_typed_ipc::__private::serde::ser::SerializeStruct::end(state)
+    }
+}
+impl ::tauri_typed_ipc::ErrorSet for SaveError {
+    fn error_type() -> ::tauri_typed_ipc::ErrorType {
+        ::tauri_typed_ipc::ErrorType {
+            name: "SaveError",
+            variants: ::std::vec!["io", "locked",],
+        }
+    }
+}

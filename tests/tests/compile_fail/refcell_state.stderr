@@ -1,0 +1,19 @@
+error[E0277]: `RefCell<[u8; 512]>` cannot be shared between threads safely
+  --> tests/compile_fail/refcell_state.rs:27:6
+   |
+27 |     .into_procedures();
+   |      ^^^^^^^^^^^^^^^ `RefCell<[u8; 512]>` cannot be shared between threads safely
+   |
+   = help: within `Levels`, the trait `std::marker::Sync` is not implemented for `RefCell<[u8; 512]>`
+   = note: if you want to do aliasing and mutation between multiple threads, use `std::sync::RwLock` instead
+note: required because it appears within the type `Levels`
+  --> tests/compile_fail/refcell_state.rs:9:8
+   |
+ 9 | struct Levels {
+   |        ^^^^^^
+note: required by a bound in `DeskDispatch::into_procedures`
+  --> tests/compile_fail/refcell_state.rs:4:1
+   |
+ 4 | #[procedures]
+   | ^^^^^^^^^^^^^ required by this bound in `DeskDispatch::into_procedures`
+   = note: this error originates in the attribute macro `procedures` (in Nightly builds, run with -Z macro-backtrace for more info)

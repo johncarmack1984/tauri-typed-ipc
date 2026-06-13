@@ -1,0 +1,32 @@
+[package]
+name = "tauri-typed-ipc"
+description = "Trait-based, type-safe Tauri IPC built on specta -- sync by default, async opt-in."
+keywords = ["tauri", "ipc", "typescript", "specta", "taurpc"]
+categories = ["gui", "development-tools"]
+readme = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tauri-typed-ipc-macros.workspace = true
+specta.workspace = true
+specta-typescript = { workspace = true, optional = true }
+specta-serde = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+thiserror.workspace = true
+
+[features]
+# Off by default: only bindings generation pulls the TypeScript
+# exporter, so runtime consumers stay lean.
+export = ["dep:specta-typescript", "dep:specta-serde"]
+
+[lints]
+workspace = true
+
+# Build docs with `export` on so the bindings API (Bindings, check, ...)
+# shows on docs.rs; the crate's default features keep runtime consumers lean.
+[package.metadata.docs.rs]
+all-features = true

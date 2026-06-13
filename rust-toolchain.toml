@@ -1,0 +1,6 @@
+# Bump deliberately, like the dependency pins. examples/src-tauri
+# inherits this too: rustup resolves by directory walk, not by cargo
+# workspace.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]
