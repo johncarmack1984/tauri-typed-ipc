@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "faders",
+  "version": "0.0.0",
+  "identifier": "dev.ttipc.faders",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "faders",
+        "width": 720,
+        "height": 240
+      }
+    ]
+  }
+}

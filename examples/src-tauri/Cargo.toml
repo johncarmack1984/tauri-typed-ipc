@@ -1,0 +1,29 @@
+# The example app is its own crate, deliberately outside the library's
+# build graph. The whole app runs through ttipc now -- sync procedures
+# inline, the async save_scene on the runtime (target sketch at the
+# bottom of src/lib.rs).
+[package]
+name = "faders"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Detach from any enclosing workspace.
+[workspace]
+
+# staticlib for iOS, cdylib for Android, rlib for the desktop binary.
+# The _lib name keeps the library artifacts from colliding with the
+# binary on Windows.
+[lib]
+name = "faders_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+ttipc = { package = "tauri-typed-ipc", path = "../../tauri-typed-ipc", features = ["export"] }
+tauri = { version = "2", features = [] }
+thiserror = "2"
+# save_scene's async disk write; fade's paced streaming.
+tokio = { version = "1", features = ["fs", "time"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
