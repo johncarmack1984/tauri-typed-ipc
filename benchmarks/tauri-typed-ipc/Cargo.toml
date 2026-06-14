@@ -1,0 +1,31 @@
+# The tauri-typed-ipc arm of the cross-framework comparison. Twin of
+# ../taurpc: same fixtures shape, same control arm, different IPC
+# layer. Detached crate with its own lockfile because the two layers
+# pin conflicting exact specta versions (tauri-typed-ipc =2.0.0-rc.25, taurpc
+# =2.0.0-rc.22) and can never resolve in one dependency graph; the
+# raw_command control arm in each twin calibrates across the split
+# binaries.
+[package]
+name = "tauri-typed-ipc-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Detach from any enclosing workspace.
+[workspace]
+
+[dependencies]
+bench-common = { path = "../common" }
+ttipc = { package = "tauri-typed-ipc", path = "../../tauri-typed-ipc" }
+serde_json = "1"
+# Feature set matches the taurpc twin exactly (defaults on, even
+# though tauri-typed-ipc itself needs neither wry nor custom-protocol) so the
+# compile-time comparison measures the IPC layer, not tauri features.
+tauri = { version = "2", features = ["test", "custom-protocol"] }
+
+[dev-dependencies]
+divan = "0.1"
+
+[[bench]]
+name = "ipc"
+harness = false

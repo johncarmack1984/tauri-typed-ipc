@@ -1,0 +1,38 @@
+//! ttipc arm: full invoke pipeline through the mock runtime.
+//!
+//! Compare against ../taurpc/benches/ipc.rs run on the same machine.
+//! The raw_command arm is the shared control: report each layer as its
+//! delta over raw in its own binary, which cancels machine and
+//! tauri-version variance between the split graphs.
+
+use bench_common::{invoke_request, mock_webview};
+use ttipc::handler;
+use tauri_typed_ipc_bench::{App, GreeterDispatch};
+use serde_json::json;
+use tauri::ipc::InvokeBody;
+use tauri::test::get_ipc_response;
+
+#[tauri::command]
+fn greet(name: String) -> String {
+    format!("Hello, {name}!")
+}
+
+#[divan::bench]
+fn raw_command(bencher: divan::Bencher) {
+    let (_app, webview) = mock_webview(tauri::generate_handler![greet]);
+    bencher
+        .with_inputs(|| invoke_request("greet", InvokeBody::Json(json!({ "name": "world" }))))
+        .bench_values(|request| get_ipc_response(&webview, request));
+}
+
+#[divan::bench]
+fn ttipc_procedure(bencher: divan::Bencher) {
+    let (_app, webview) = mock_webview(handler(App.into_procedures()));
+    bencher
+        .with_inputs(|| invoke_request("greet", InvokeBody::Json(json!({ "name": "world" }))))
+        .bench_values(|request| get_ipc_response(&webview, request));
+}
+
+fn main() {
+    divan::main();
+}

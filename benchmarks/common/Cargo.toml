@@ -1,0 +1,15 @@
+# Shared mock-IPC plumbing for the benchmark twins. A separate crate so
+# both arms run byte-identical harness code even though they can never
+# share one dependency graph (conflicting exact specta pins; see the
+# twin manifests).
+[package]
+name = "bench-common"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Detach from any enclosing workspace.
+[workspace]
+
+[dependencies]
+tauri = { version = "2", default-features = false, features = ["test"] }
