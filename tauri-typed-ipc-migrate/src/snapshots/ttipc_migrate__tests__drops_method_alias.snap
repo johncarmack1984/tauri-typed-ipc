@@ -1,0 +1,11 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - alias: `#[taurpc(alias = "..")]` was dropped (ttipc names methods by `MethodCase`); rename the method or update the call sites if the alias mattered.
+
+#[ttipc::procedures(path = "app")]
+pub trait App {
+    async fn with_alias(&self) -> u8;
+}

@@ -1,0 +1,15 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: channels
+---
+// domain logic -- keep this comment
+pub struct Store;
+
+impl Store {
+    /// Save and notify.
+    pub fn save(&self, app: AppHandle, value: u8) -> Result<(), String> {
+        // emit the update
+        CmdEvent::Updated { value: value }.emit(&app).map_err(|e| e.to_string())?;
+        Ok(()) // trailing comment
+    }
+}

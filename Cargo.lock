@@ -2839,6 +2839,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-typed-ipc-migrate"
+version = "0.0.0"
+dependencies = [
+ "divan",
+ "insta",
+ "prettyplease",
+ "proc-macro2",
+ "syn 2.0.117",
+ "tempfile",
+]
+
+[[package]]
 name = "tauri-typed-ipc-tests"
 version = "0.0.0"
 dependencies = [

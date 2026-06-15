@@ -1,0 +1,17 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: lib
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - mount: the TauRPC Router/handler became `ttipc::handler(..)` (a `-> Router` factory now returns `ttipc::Procedures`); generate bindings separately (`ttipc::Bindings`, replacing the dropped `export_config`), keep app state on `.manage(..)`, and drop any now-unused local config bindings.
+
+
+pub fn run() {
+    let handler = ttipc::handler(crate::router::build());
+    let unrelated = some_lib::Thing::new().into_handler();
+    tauri::Builder::default()
+        .manage(unrelated)
+        .invoke_handler(handler)
+        .run(tauri::generate_context!())
+        .unwrap();
+}

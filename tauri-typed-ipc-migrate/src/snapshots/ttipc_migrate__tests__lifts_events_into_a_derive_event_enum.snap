@@ -1,0 +1,17 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - events: `#[taurpc(event)]` methods were lifted into a `#[derive(ttipc::Event)]` enum (matching emit sites were rewritten to `Enum::Variant.emit(&h)`); drop any now-empty trait/impl.
+
+#[ttipc::procedures(path = "app")]
+pub trait App {
+    async fn ping(&self) -> u8;
+}
+#[derive(ttipc::Event)]
+pub enum AppEvent {
+    Ready,
+    Progress { percent: u8 },
+    Moved { x: i32, y: i32 },
+}

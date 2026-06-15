@@ -1,0 +1,11 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - mount: the TauRPC Router/handler became `ttipc::handler(..)` (a `-> Router` factory now returns `ttipc::Procedures`); generate bindings separately (`ttipc::Bindings`, replacing the dropped `export_config`), keep app state on `.manage(..)`, and drop any now-unused local config bindings.
+
+pub fn build() -> ttipc::Procedures {
+    let typescript = config();
+    AppImpl.into_procedures().merge(LogImpl.into_procedures())
+}

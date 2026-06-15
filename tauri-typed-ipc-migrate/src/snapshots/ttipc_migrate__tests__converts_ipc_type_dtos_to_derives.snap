@@ -1,0 +1,26 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - imports: drop the now-unused `Runtime`; `Channel` is now `ttipc::Channel`.
+//   - dto deps: converted `ipc_type` structs derive `serde` and `specta::Type` directly; add `serde` (with `derive`) and `specta` as dependencies.
+//   - de-async: methods with no blocking `.await` were made sync (ttipc's default), and their `.await`s on now-sync siblings were dropped.
+
+#[derive(serde::Serialize, serde::Deserialize, specta::Type, Clone)]
+pub struct User {
+    /// The user's id
+    uid: i32,
+    name: String,
+}
+#[ttipc::procedures(path = "users")]
+pub trait Users {
+    fn get(&self, app_handle: AppHandle) -> User;
+}
+#[derive(Clone)]
+pub struct UsersImpl;
+impl Users for UsersImpl {
+    fn get(&self, app_handle: AppHandle) -> User {
+        User { uid: 1, name: "a".into() }
+    }
+}

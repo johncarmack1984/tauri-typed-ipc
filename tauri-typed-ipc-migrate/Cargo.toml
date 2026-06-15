@@ -1,0 +1,30 @@
+[package]
+name = "tauri-typed-ipc-migrate"
+description = "Source transform from a TauRPC procedures trait to a tauri-typed-ipc #[procedures] trait."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ttipc_migrate"
+
+[[bin]]
+name = "ttipc-migrate"
+path = "src/main.rs"
+
+[dependencies]
+prettyplease.workspace = true
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+syn = { workspace = true, features = ["visit", "visit-mut"] }
+
+[dev-dependencies]
+divan.workspace = true
+insta.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "transform"
+harness = false
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - events: a `#[taurpc(event)]` method carrying a payload enum was removed; `#[derive(ttipc::Event)]` was added to that enum (its variants are the events). Emit it directly as `event.emit(&h)`; drop any now-empty trait/impl.
+
+#[derive(ttipc::Event)]
+pub enum AppEvent {
+    Tick,
+}
+#[ttipc::procedures(path = "app")]
+pub trait AppMethods {}
+pub fn fire(h: AppHandle, e: AppEvent) {
+    e.clone().emit(&h.clone()).unwrap();
+    e.emit_to(&h, EventTarget::Any)?;
+}

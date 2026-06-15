@@ -1,0 +1,8 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+pub fn run() {
+    let h = other_lib::Thing::new().into_handler();
+    serve(h);
+}

@@ -1,0 +1,19 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - imports: drop the now-unused `Runtime`; `Channel` is now `ttipc::Channel`.
+//   - async injection: ttipc rejects an `async` procedure that takes `AppHandle`/`State<T>`; make it sync, or rework so the async body needs no injected handle/state.
+
+#[ttipc::procedures(path = "api")]
+pub trait Api {
+    async fn watch(&self, app_handle: AppHandle);
+}
+pub struct ApiImpl;
+impl Api for ApiImpl {
+    async fn watch(&self, app_handle: AppHandle) {
+        tick().await;
+        let _ = app_handle;
+    }
+}

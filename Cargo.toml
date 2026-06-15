@@ -1,5 +1,5 @@
 [workspace]
-members = ["tauri-typed-ipc", "tauri-typed-ipc-macros", "tests"]
+members = ["tauri-typed-ipc", "tauri-typed-ipc-macros", "tauri-typed-ipc-migrate", "tests"]
 resolver = "3"
 
 [workspace.package]

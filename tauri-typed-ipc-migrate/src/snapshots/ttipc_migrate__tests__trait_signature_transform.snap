@@ -1,0 +1,18 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - errors: each `Result<_, E>` needs `E: ttipc::Error` (derive it on the error type).
+//   - imports: drop the now-unused `Runtime`; `Channel` is now `ttipc::Channel`.
+//   - async injection: ttipc rejects an `async` procedure that takes `AppHandle`/`State<T>`; make it sync, or rework so the async body needs no injected handle/state.
+
+#[ttipc::procedures(path = "greeter")]
+pub trait Greeter {
+    async fn greet(&self, app_handle: AppHandle, name: String) -> Result<String>;
+    async fn stream(
+        &self,
+        app_handle: AppHandle,
+        sink: ttipc::Channel<Tick>,
+    ) -> Result<()>;
+}

@@ -1,0 +1,14 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - events: `#[taurpc(event)]` methods were lifted into a `#[derive(ttipc::Event)]` enum (matching emit sites were rewritten to `Enum::Variant.emit(&h)`); drop any now-empty trait/impl.
+//   - event group: a multi-level `path` has no single ttipc event group; rename the generated enum so its group matches your namespace.
+
+#[ttipc::procedures(path = "api.ui")]
+pub trait UiApi {}
+#[derive(ttipc::Event)]
+pub enum UiApiEvent {
+    Refreshed,
+}

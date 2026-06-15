@@ -1,0 +1,7 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+pub trait Plain {
+    fn untouched(&self) -> u8;
+}

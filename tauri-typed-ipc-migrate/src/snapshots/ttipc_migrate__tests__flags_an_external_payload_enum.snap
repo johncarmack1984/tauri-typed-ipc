@@ -1,0 +1,12 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+// Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
+//   - events: a `#[taurpc(event)]` method carrying an external payload enum was removed; add `#[derive(ttipc::Event)]` to that enum in its defining crate (its group must match the namespace), and emit it as `event.emit(&h)`.
+
+use other_crate::FeedEvent;
+#[ttipc::procedures(path = "feed")]
+pub trait FeedMethods {
+    async fn active(&self) -> bool;
+}

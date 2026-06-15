@@ -1,0 +1,8 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: out
+---
+#[ttipc::procedures(path = "ping")]
+pub trait Ping {
+    async fn ping(&self);
+}
