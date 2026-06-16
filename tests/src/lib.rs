@@ -168,7 +168,7 @@ impl Tags for TagStore {
     }
 }
 
-/// Managed state for the State<T> injection tests and bench: a value
+/// Managed state for the `State<T>` injection tests and bench: a value
 /// the procedure reads through `tauri::State`, proving injection
 /// resolves from the app's runtime-free StateManager, not from the
 /// set's own `&self`.

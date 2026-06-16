@@ -8,7 +8,10 @@ use std::sync::{Arc, Mutex};
 use serde_json::json;
 use tauri::ipc::{Channel as TauriChannel, InvokeResponseBody, JavaScriptChannelId};
 use ttipc::{Context, Dispatch, DispatchError, Outcome};
-use ttipc_tests::{App, BackupDispatch, Downloader, DownloadsDispatch, GreeterDispatch, Vault};
+use ttipc_tests::{
+    App, BackupDispatch, CountedDispatch, CounterDispatch, Downloader, DownloadsDispatch,
+    GreeterDispatch, Service, Tally, Vault,
+};
 
 /// The synchronous half of a [`Dispatch`], for the sync procedures under
 /// test here; an `async fn` would arrive as [`Dispatch::Async`].
@@ -31,6 +34,41 @@ fn dispatches_by_name() {
 fn unknown_procedure_is_an_error() {
     let err = sync(App.dispatch(&Context::empty(), "nope", json!({}))).unwrap_err();
     assert!(matches!(&err, DispatchError::UnknownProcedure(p) if p == "nope"));
+}
+
+#[test]
+fn merge_routes_unknown_through_to_an_error() {
+    // An unknown command falls through the first set to the second,
+    // which owns no such name either -- so the merged set still reports
+    // UnknownProcedure rather than silently swallowing the call.
+    let merged = App.into_procedures().merge(Tally.into_procedures());
+    let err = sync(merged.dispatch(&Context::empty(), "nope", json!({}))).unwrap_err();
+    assert!(matches!(&err, DispatchError::UnknownProcedure(p) if p == "nope"));
+}
+
+#[test]
+fn merge_chain_routes_each_set() {
+    // a.merge(b).merge(c): the chain nests the fall-through, so a name
+    // from each of the three sets still reaches its own dispatch.
+    let merged = App
+        .into_procedures()
+        .merge(Tally.into_procedures())
+        .merge(Service.into_procedures());
+
+    assert_eq!(
+        sync(merged.dispatch(&Context::empty(), "greet", json!({ "name": "world" }))).unwrap(),
+        Outcome::Resolve(json!("Hello, world!"))
+    );
+    assert_eq!(
+        sync(merged.dispatch(&Context::empty(), "count", json!({ "n": 41 }))).unwrap(),
+        Outcome::Resolve(json!(42))
+    );
+    // The third set's `hits` reads managed state; a bare context carries
+    // none, so it reaches that set's dispatch and fails with MissingState
+    // -- proving the call routed past the first two, not a generic
+    // UnknownProcedure.
+    let err = sync(merged.dispatch(&Context::empty(), "hits", json!({}))).unwrap_err();
+    assert!(matches!(&err, DispatchError::MissingState(ty) if ty.contains("Hits")));
 }
 
 #[test]

@@ -1,0 +1,5 @@
+error: async procedures cannot take injected (AppHandle) or managed State parameters yet
+ --> tests/compile_fail/async_injection.rs:3:5
+  |
+3 |     async fn snapshot(&self, app: tauri::AppHandle, label: String) -> String;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

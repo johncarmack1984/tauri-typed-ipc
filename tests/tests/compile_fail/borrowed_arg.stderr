@@ -1,0 +1,5 @@
+error: procedure arguments must be owned types (they are deserialized off the wire)
+ --> tests/compile_fail/borrowed_arg.rs:3:27
+  |
+3 |     fn greet(&self, name: &str) -> String;
+  |                           ^^^^
