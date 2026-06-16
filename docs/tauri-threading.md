@@ -106,7 +106,7 @@ before any claim is made.
   'static` (app.rs:1652), so the captured procedure-set impl must be
   `Sync` -- which `RefCell` is not. tauri escapes this for its own
   window map with `unsafe impl Send/Sync`; tauri-typed-ipc forbids `unsafe`
-  (`unsafe_code = "deny"`), so shared state interior-mutates behind a
+  (`unsafe_code = "forbid"`), so shared state interior-mutates behind a
   `Mutex` (uncontended, ~ns). The faders example ships `Mutex<[u8;512]>`.
   Sync-first's payoff is the *inline dispatch* above (no spawn, no
   executor, no `Send`-coloring of command logic), NOT `RefCell` vs
@@ -117,10 +117,10 @@ before any claim is made.
   there is no extra tension. tauri-typed-ipc does NOT add a `ctx.sync(|| ...)`
   main-thread hop over tauri's `run_on_main_thread`: it would not lift
   the registration bound above, and it is exactly the re-entrant
-  main-thread pattern behind tauri's `RefCell`-window-map panic (the
-  upstream scar, fixed only on tauri dev as of 2026-06; tauri-typed-ipc targets
-  stock tauri). Sync stays the safe path; async opt-in matches a raw
-  tauri async command, no worse.
+  main-thread pattern behind tauri's `RefCell`-window-map panic (fixed
+  only on tauri dev as of 2026-06; tauri-typed-ipc targets stock tauri).
+  Sync stays the safe path; async opt-in matches a raw tauri async
+  command, no worse.
 
 ## Sources
 

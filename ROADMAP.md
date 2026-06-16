@@ -112,6 +112,9 @@ paying the async tax.
 - **R5 Ship.** Examples and docs ("hello-tauri-typed-ipc"), port lux to tauri-typed-ipc as
   the dogfood validation, publish 0.1.0 on specta rc.25.
 
+**Status (2026-06):** R0-R5 are complete; 0.1.0 is the release at hand, built on
+specta rc.25. The lux dogfood port is paused pending DMX hardware.
+
 ### Open questions
 
 - **Fire-and-forget bindings.** Tauri IPC is async at the transport, so any
@@ -124,8 +127,8 @@ paying the async tax.
   `Promise<T>` uniformly; (B) auto-derive fire-and-forget from the `-> ()`
   signature, which also lets `no-floating-promises` flag exactly the
   fallible/returning calls and stay quiet on the rest; (C) opt in per command
-  via an attribute, defaulting to `Promise<T>`. C is the most flexible and
-  keeps await-ability by default; B may be the more ergonomic default. Decide
+  via an attribute, defaulting to `Promise<T>`. C keeps await-ability by
+  default and is opt-in per command; B may be the more ergonomic default. Decide
   in R2 with the error model. Whichever wins, a fire-and-forget binding must
   return `void`, not `Promise<void>`, or it trips `no-floating-promises` and
   loses the ergonomic.
