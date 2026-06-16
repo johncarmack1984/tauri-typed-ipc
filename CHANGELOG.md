@@ -1,0 +1,28 @@
+# Changelog
+
+All notable changes to this project are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-06-16
+
+Initial release. Built on specta `2.0.0-rc.25` (pinned exactly; see the README).
+
+### Added
+
+- `#[procedures]`: define an IPC surface as a Rust trait, flattened into a dispatch
+  core plus a descriptor. `handler` mounts it on tauri's invoke pipeline, wire-identical
+  to a raw `#[tauri::command]` (same command name, same named-argument JSON, no envelope),
+  so generated calls, hand-written `invoke`s, and raw commands interoperate.
+- Sync commands by default, dispatched inline on the main thread; a single `async fn`
+  opts that one procedure onto tauri's runtime.
+- Typed events in both directions via `#[derive(Event)]` (`emit` and targeted `emit_to`).
+- Typed errors: a `Result<_, E>` procedure rejects `E` on the wire via `#[derive(Error)]`,
+  and the generated client types its `catch` against it.
+- Type-matched injection of `AppHandle` and `tauri::State<T>` (by type, never by name).
+- Streaming via `Channel<T>` parameters.
+- TypeScript client generation behind the `export` feature, with a `check` mode that
+  fails CI when the committed client drifts from the Rust definition.
+- `ttipc-migrate`: a source codemod from TauRPC to tauri-typed-ipc.
+
+[0.1.0]: https://github.com/johncarmack1984/tauri-typed-ipc/releases/tag/v0.1.0

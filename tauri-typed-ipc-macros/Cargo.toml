@@ -3,8 +3,10 @@ name = "tauri-typed-ipc-macros"
 description = "Procedural macros for tauri-typed-ipc. Use through the tauri-typed-ipc crate."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+exclude = ["src/snapshots/"]
 
 [lib]
 proc-macro = true

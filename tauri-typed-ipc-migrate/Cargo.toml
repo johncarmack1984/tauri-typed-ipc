@@ -1,10 +1,15 @@
 [package]
 name = "tauri-typed-ipc-migrate"
-description = "Source transform from a TauRPC procedures trait to a tauri-typed-ipc #[procedures] trait."
+description = "Codemod that migrates a TauRPC codebase to tauri-typed-ipc."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["tauri", "taurpc", "migration", "codemod", "ipc"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["src/snapshots/", "tests/"]
 
 [lib]
 name = "ttipc_migrate"
