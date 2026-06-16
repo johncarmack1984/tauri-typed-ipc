@@ -28,6 +28,10 @@ type ChannelFactory<'a> = dyn Fn(JavaScriptChannelId) -> TauriChannel + Send + S
 
 /// Injectable values for one dispatch call, borrowed from the caller.
 /// Procedures without injected parameters never look at it.
+///
+/// The handler builds and fills this; generated `dispatch` reads it. It is
+/// not part of the hand-written surface, so it is hidden from the docs.
+#[doc(hidden)]
 pub struct Context<'a> {
     values: &'a [&'a (dyn Any + Send + Sync)],
     state: Option<&'a StateManager>,

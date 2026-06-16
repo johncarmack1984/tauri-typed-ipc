@@ -162,6 +162,7 @@ mod render {
     /// error at export: lossless transport past 2^53 needs an upstream
     /// tauri invoke reviver hook (responses are parsed with
     /// `response.json()`, with no hook to add one), so it is post-0.1.
+    #[must_use]
     pub struct Bindings {
         types: Types,
         sets: Vec<Set>,

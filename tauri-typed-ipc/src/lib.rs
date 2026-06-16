@@ -12,9 +12,10 @@
 //!
 //! A procedure is a plain `fn` by default, dispatched inline on the main
 //! thread; mark one `async fn` and only that one is spawned on tauri's
-//! runtime. Sync-first is the founding choice -- most IPC handlers are
-//! short, and a sync handler touches none of the `Send`/`!Send` and
-//! main-thread constraints the async path carries.
+//! runtime. Sync-first is the founding choice: a sync handler carries no
+//! `Send` bound on its own logic and skips the executor hop, where TauRPC
+//! makes every procedure `async`. (A sync handler still runs on the UI
+//! thread, so long-running work opts into `async`.)
 //!
 //! # Quickstart
 //!
@@ -90,10 +91,18 @@ mod handler;
 
 #[cfg(feature = "export")]
 pub use bindings::{Bindings, BindingsError, Layout, MethodCase};
-pub use bindings::{ErrorSet, ErrorType, EventSet, EventType, ProcedureSet, ProcedureType};
+pub use bindings::{ErrorSet, EventSet, ProcedureSet};
+// Descriptor payloads carried from the derives to the bindings generator. Named
+// in generated code (`ProcedureSet::procedures` etc.), never built by hand.
+#[doc(hidden)]
+pub use bindings::{ErrorType, EventType, ProcedureType};
 pub use channel::Channel;
 pub use context::Context;
-pub use handler::{Dispatch, Outcome, Procedures, handler, handler_with_fallback};
+pub use handler::{Procedures, handler, handler_with_fallback};
+// The dispatch result types: returned by generated `dispatch` and consumed by
+// `handler`. Plumbing, not part of the hand-written surface.
+#[doc(hidden)]
+pub use handler::{Dispatch, Outcome};
 pub use tauri_typed_ipc_macros::{Error, Event, procedures};
 
 /// Error returned by a generated `dispatch` when a call cannot reach
@@ -121,7 +130,7 @@ pub enum DispatchError {
     MissingInjection(&'static str),
     /// A `State<T>` parameter was requested, but no value of that type
     /// is managed -- the app never called `.manage()` for it.
-    #[error("state not managed: {0}")]
+    #[error("state not managed: {0} -- did the app call `.manage()` for it?")]
     MissingState(&'static str),
     /// A `Channel<T>` parameter was requested, but the dispatch
     /// [`Context`] carried no channel factory. The handler always

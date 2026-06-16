@@ -10,9 +10,10 @@
 //! Note on stability: tauri documents [`Invoke`] as an unstable,
 //! macro-facing API, but [`tauri::Builder::invoke_handler`] -- the
 //! only public mount point for custom routing -- takes a closure over
-//! it, so every IPC layer (TauRPC included) stands on this seam. The
-//! exact-version dependency pins make a breaking change here a loud,
-//! deliberate bump instead of a silent one.
+//! it, so every IPC layer (TauRPC included) stands on this seam. tauri is
+//! a caret dependency (`tauri = "2"`), so a 2.x release that reshapes
+//! `Invoke` would surface here; the crate is tested against the current
+//! tauri 2.x and bumps deliberately if the seam moves.
 
 use std::any::Any;
 use std::future::Future;
@@ -62,6 +63,7 @@ type DispatchFn = dyn Fn(&Context<'_>, &str, Value) -> Dispatch + Send + Sync;
 /// knowledge of the trait itself. [`merge`](Self::merge) combines
 /// several sets into one, so a whole app mounts on a single
 /// [`handler`].
+#[must_use]
 pub struct Procedures {
     names: Box<[&'static str]>,
     dispatch: Box<DispatchFn>,
@@ -77,8 +79,11 @@ impl Procedures {
     /// procedure-set impl is captured here, so it must be `Sync`. That
     /// rules out `!Sync` state (`RefCell`, `Rc`) -- shared state interior-
     /// mutates behind a `Mutex` (an uncontended lock is ~ns). tauri itself
-    /// escapes this with `unsafe impl Send/Sync`, which tauri_typed_ipc forbids
-    /// (`unsafe_code = "deny"`). See docs/tauri-threading.md.
+    /// escapes this with `unsafe impl Send/Sync`, which tauri-typed-ipc forbids
+    /// (`unsafe_code = "forbid"`). See the [threading model][tm].
+    ///
+    /// [tm]: https://github.com/johncarmack1984/tauri-typed-ipc/blob/main/docs/tauri-threading.md
+    #[doc(hidden)]
     pub fn new(
         names: &'static [&'static str],
         dispatch: impl Fn(&Context<'_>, &str, Value) -> Dispatch + Send + Sync + 'static,
@@ -90,6 +95,7 @@ impl Procedures {
     }
 
     /// The procedure names this set answers to.
+    #[must_use]
     pub fn names(&self) -> &[&'static str] {
         &self.names
     }
@@ -205,7 +211,11 @@ where
             Dispatch::Async(future) => {
                 // The future is `R`-free and `Send`, so it spawns on
                 // tauri's runtime while the `InvokeResolver<R>` rides
-                // along to settle the response off the main thread.
+                // along to settle the response off the main thread. If the
+                // future panics, the task unwinds before settling, so the
+                // invoke neither resolves nor rejects (the JS promise stays
+                // pending) -- the same outcome as a panicking raw async
+                // command.
                 tauri::async_runtime::spawn(async move {
                     settle(resolver, future.await);
                 });

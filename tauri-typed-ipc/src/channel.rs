@@ -42,6 +42,7 @@ impl<T> Channel<T> {
 
     /// The channel identifier, matching the JavaScript `Channel` that
     /// receives the messages.
+    #[must_use]
     pub fn id(&self) -> u32 {
         self.inner.id()
     }
