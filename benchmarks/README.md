@@ -29,11 +29,26 @@ runtime (routing, payload deserialize, call, response serialize,
 responder). The mock runtime skips the webview and the process hop, so
 the absolute numbers are the Rust-side cost only.
 
+The tauri-typed-ipc binary runs three arms over the same `greet`
+workload:
+
+- `raw_command` -- a plain `#[tauri::command]`, the control.
+- `ttipc_procedure` -- the sync-first path (sync `fn`).
+- `ttipc_async_procedure` -- the async path (`async fn`), which adds the
+  spawn-and-resolve round-trip.
+
+The taurpc binary has the matching `raw_command` control and a single
+taurpc arm, whose resolvers are async-only.
+
 Read the results as each layer's **delta over the `raw_command` control
 in its own binary** -- that cancels machine and run variance across the
-split. The taurpc delta includes its executor round-trip (its resolvers
-are async-only); that is the design difference under measurement, not
-an artifact.
+split. Compare like with like: `ttipc_async_procedure` vs the taurpc arm
+is the apples-to-apples async-vs-async pair, since both pay the executor
+round-trip. `ttipc_procedure` is the sync-first arm -- it has no taurpc
+equivalent, and its smaller delta is the win from staying sync by
+default. The async round-trip in `ttipc_async_procedure` and in taurpc
+is tauri's runtime, the design difference under measurement, not an
+artifact.
 
 ## Compile cost
 
