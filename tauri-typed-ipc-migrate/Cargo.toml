@@ -4,6 +4,7 @@ description = "Source transform from a TauRPC procedures trait to a tauri-typed-
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [lib]
 name = "ttipc_migrate"

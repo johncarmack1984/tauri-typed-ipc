@@ -110,7 +110,7 @@ paying the async tax.
   events, phase-aware bindings (pillar 4), BigInt transport (pillar 5), and
   drift-proof codegen with a check/watch mode (pillar 6).
 - **R5 Ship.** Examples and docs ("hello-tauri-typed-ipc"), port lux to tauri-typed-ipc as
-  the dogfood validation, publish 0.1.0 -- gated on specta 2.0.0 stable.
+  the dogfood validation, publish 0.1.0 on specta rc.25.
 
 ### Open questions
 

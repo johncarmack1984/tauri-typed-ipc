@@ -3,10 +3,11 @@ name = "tauri-typed-ipc"
 description = "Trait-based, type-safe Tauri IPC built on specta -- sync by default, async opt-in."
 keywords = ["tauri", "ipc", "typescript", "specta", "taurpc"]
 categories = ["gui", "development-tools"]
-readme = false
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 tauri-typed-ipc-macros.workspace = true

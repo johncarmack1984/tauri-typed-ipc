@@ -4,6 +4,7 @@ description = "Procedural macros for tauri-typed-ipc. Use through the tauri-type
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [lib]
 proc-macro = true
