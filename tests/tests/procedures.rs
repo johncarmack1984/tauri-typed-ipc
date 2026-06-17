@@ -10,7 +10,7 @@ use tauri::ipc::{Channel as TauriChannel, InvokeResponseBody, JavaScriptChannelI
 use ttipc::{Context, Dispatch, DispatchError, Outcome};
 use ttipc_tests::{
     App, BackupDispatch, CountedDispatch, CounterDispatch, Downloader, DownloadsDispatch,
-    GreeterDispatch, Service, Tally, Vault,
+    GreeterDispatch, NotesDispatch, NotesImpl, Service, Tally, Vault,
 };
 
 /// The synchronous half of a [`Dispatch`], for the sync procedures under
@@ -75,6 +75,21 @@ fn merge_chain_routes_each_set() {
 fn bad_arguments_are_an_error() {
     let err = sync(App.dispatch(&Context::empty(), "greet", json!({}))).unwrap_err();
     assert!(matches!(err, DispatchError::Deserialize(_)));
+}
+
+#[test]
+fn string_error_rejects_as_a_bare_string() {
+    // The taurpc drop-in: a `Result<_, String>` Err rejects with the bare string
+    // on the wire (not a `{ type, message }` object), matching a raw `#[command]`.
+    // The Ok path resolves normally.
+    assert_eq!(
+        sync(NotesImpl.dispatch(&Context::empty(), "save", json!({ "note": "" }))).unwrap(),
+        Outcome::Reject(json!("note is empty"))
+    );
+    assert_eq!(
+        sync(NotesImpl.dispatch(&Context::empty(), "save", json!({ "note": "hi" }))).unwrap(),
+        Outcome::Resolve(json!(2))
+    );
 }
 
 #[test]

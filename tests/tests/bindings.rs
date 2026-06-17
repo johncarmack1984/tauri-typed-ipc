@@ -7,8 +7,8 @@ use std::path::Path;
 use ttipc::{Bindings, BindingsError, Layout, MethodCase};
 use ttipc_tests::{
     DownloadsProcedures, FaderEvent, FadersProcedures, GuardedProcedures, LedgerProcedures,
-    MixerProcedures, PatchesProcedures, PostsEvent, PostsProcedures, ScenesProcedures, SignalEvent,
-    TagsProcedures,
+    MixerProcedures, NotesProcedures, PatchesProcedures, PostsEvent, PostsProcedures,
+    ScenesProcedures, SignalEvent, TagsProcedures,
 };
 
 #[test]
@@ -129,6 +129,22 @@ fn typed_error_client() {
         .register::<GuardedProcedures>()
         .export()
         .expect("guarded client renders");
+    insta::assert_snapshot!(client);
+}
+
+#[test]
+fn string_error_is_the_taurpc_dropin() {
+    // `Result<_, String>` (the taurpc drop-in) renders `Promise<T>` with a
+    // `@throws {string}` JSDoc -- the rejection is the built-in `string`, with no
+    // `export type` alias. The infallible sibling gets neither.
+    let client = Bindings::new()
+        .register::<NotesProcedures>()
+        .export()
+        .expect("notes client renders");
+    assert!(
+        client.contains("@throws {string}") && !client.contains("export type string"),
+        "the string error should render inline with no alias:\n{client}"
+    );
     insta::assert_snapshot!(client);
 }
 

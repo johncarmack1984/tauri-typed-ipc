@@ -4,7 +4,7 @@
 use ttipc::{Bindings, Layout};
 use ttipc_tests::{
     DownloadsProcedures, FaderEvent, FadersProcedures, GuardedProcedures, MixerProcedures,
-    PostsProcedures, ScenesProcedures, SignalEvent, TagsProcedures,
+    NotesProcedures, PostsProcedures, ScenesProcedures, SignalEvent, TagsProcedures,
 };
 
 fn main() {
@@ -81,6 +81,16 @@ fn export_typed_error() -> String {
     // discriminated-union rendering.
     Bindings::new()
         .register::<GuardedProcedures>()
+        .export()
+        .expect("client renders")
+}
+
+#[divan::bench]
+fn export_string_error() -> String {
+    // The taurpc drop-in: a `Result<_, String>` exercises the inline `string`
+    // error path -- `@throws {string}` with no `export type` alias.
+    Bindings::new()
+        .register::<NotesProcedures>()
         .export()
         .expect("client renders")
 }
