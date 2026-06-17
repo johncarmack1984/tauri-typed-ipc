@@ -193,6 +193,33 @@ fn transform_router_factory() -> String {
     transform(black_box(ROUTER_FACTORY)).expect("valid Rust")
 }
 
+// A mount whose bindings config is built from specta_typescript locals fed only
+// into `export_config`: the locals and the now-unused import are pruned.
+const MOUNT_WITH_CONFIG: &str = r#"use specta_typescript::Typescript;
+
+pub fn run() {
+    let formatter = specta_typescript::formatter::prettier;
+    let bigint = specta_typescript::BigIntExportBehavior::Number;
+    let bindings = Typescript::default().formatter(formatter).bigint(bigint);
+    let router = taurpc::Router::new()
+        .export_config(bindings)
+        .merge(AppImpl.into_handler());
+    tauri::Builder::default()
+        .invoke_handler(router.into_handler())
+        .run(tauri::generate_context!())
+        .expect("error");
+}
+"#;
+
+#[divan::bench]
+fn transform_mount_with_config() -> Vec<(String, String)> {
+    transform_project(black_box(&[(
+        "lib.rs".to_string(),
+        MOUNT_WITH_CONFIG.to_string(),
+    )]))
+    .expect("valid Rust")
+}
+
 // A split mount across two files: a `build() -> Router` factory and a separate
 // `build().into_handler()` consumer resolved through the project registry.
 const FACTORY_FILE: &str = r#"
