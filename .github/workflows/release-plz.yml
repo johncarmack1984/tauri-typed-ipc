@@ -48,8 +48,7 @@ jobs:
         uses: release-plz/action@v0.5.130
         with:
           command: release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
 
   # Opens/updates the release PR (version bump + changelog). The PR is reviewed
   # before merge per the repo's no-merge-without-review rule.
@@ -78,5 +77,4 @@ jobs:
         uses: release-plz/action@v0.5.130
         with:
           command: release-pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
