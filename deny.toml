@@ -16,6 +16,10 @@ ignore = [
     # Add advisory IDs here with a one-line reason when triage decides to
     # accept the risk, e.g.:
     # { id = "RUSTSEC-0000-0000", reason = "no fix available; not reachable" },
+    # glib VariantStrIter unsoundness, pulled transitively via tauri's gtk 0.18
+    # stack. No released tauri uses gtk/glib 0.20, so there is no upgrade path
+    # yet; revisit when tauri moves to gtk-rs 0.20.
+    { id = "RUSTSEC-2024-0429", reason = "glib VariantStrIter unsoundness; transitive via tauri's gtk 0.18 stack, no released tauri uses gtk/glib 0.20" },
 ]
 
 [licenses]

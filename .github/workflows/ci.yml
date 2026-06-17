@@ -11,6 +11,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default for every job; none of them write to the repo.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
