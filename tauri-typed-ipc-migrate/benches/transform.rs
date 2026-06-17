@@ -50,6 +50,26 @@ fn transform_resolver() -> String {
     transform(black_box(RESOLVER)).expect("valid Rust")
 }
 
+// BigInt-style integers on the wire (a `usize` arg and a `usize` struct field):
+// flagged, since ttipc's exporter rejects them with no `BigIntExportBehavior`.
+const BIGINT: &str = r#"
+#[derive(serde::Serialize, specta::Type, Clone)]
+pub struct Channel {
+    pub channel_number: usize,
+    pub label: String,
+}
+
+#[taurpc::procedures(path = "cmd")]
+pub trait CmdMethods {
+    async fn update<R: Runtime>(app_handle: AppHandle<R>, channel_number: usize) -> Result<u8, String>;
+}
+"#;
+
+#[divan::bench]
+fn transform_bigint() -> String {
+    transform(black_box(BIGINT)).expect("valid Rust")
+}
+
 const DEASYNC: &str = r#"
 #[taurpc::procedures(path = "calc")]
 pub trait Calc {
