@@ -48,14 +48,15 @@ jobs:
         uses: release-plz/action@v0.5.130
         with:
           command: release
-          github_token: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
 
   # Opens/updates the release PR (version bump + changelog). The PR is reviewed
   # before merge per the repo's no-merge-without-review rule.
   #
   # Note: PRs opened with GITHUB_TOKEN do not trigger other workflows, so ci.yml
-  # will not run on the release PR. To get CI on it, set a PAT or GitHub App
-  # token as a secret and pass it as the action's `github_token`.
+  # will not run on the release PR. To get CI on it, add a PAT or GitHub App
+  # token as the RELEASE_PLZ_TOKEN secret (consumed via GITHUB_TOKEN above).
   release-pr:
     name: release-plz PR
     runs-on: ubuntu-latest
@@ -77,4 +78,5 @@ jobs:
         uses: release-plz/action@v0.5.130
         with:
           command: release-pr
-          github_token: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
