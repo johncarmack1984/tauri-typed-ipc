@@ -1,0 +1,32 @@
+# release-plz: versioning, changelog, publishing, and tagging driven from main.
+# https://release-plz.dev/docs/config
+#
+# The three published crates all inherit version.workspace = true, so release-plz
+# treats them as one version group: it bumps the single [workspace.package]
+# version (the highest required bump wins), releases them in lockstep, and
+# rewrites the internal "=x.y.z" pins in [workspace.dependencies] to match. The
+# test crate is publish = false and is skipped automatically.
+#
+# The project keeps ONE root changelog and ONE "vX.Y.Z" tag/release: the
+# tauri-typed-ipc crate owns both; the macros and migrate crates publish without
+# a separate changelog, tag, or GitHub release.
+
+[[package]]
+name = "tauri-typed-ipc"
+changelog_path = "CHANGELOG.md"
+git_tag_name = "v{{ version }}"
+
+[[package]]
+name = "tauri-typed-ipc-macros"
+# macros changes surface in tauri-typed-ipc's changelog (the lib depends on it).
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "tauri-typed-ipc-migrate"
+# Standalone CLI; a migrate-only change will not auto-appear in the changelog, so
+# add a line in the release PR if one matters (the PR is reviewed before merge).
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false
