@@ -294,6 +294,31 @@ impl<'ast> Visit<'ast> for EmitEditCollector<'_> {
         }
         syn::visit::visit_expr(self, expr);
     }
+
+    // A `use ..::FooEventTrigger;` import goes stale once the emit sites become
+    // `FooEvent::Variant.emit(&h)`: the trigger type no longer exists, but the
+    // generated enum does. Rewrite the imported name to the enum (the registry
+    // already holds the trigger -> enum mapping), keeping the rest of the path,
+    // so the file still resolves.
+    fn visit_use_name(&mut self, node: &'ast syn::UseName) {
+        self.rewrite_trigger_import(&node.ident);
+    }
+
+    fn visit_use_rename(&mut self, node: &'ast syn::UseRename) {
+        self.rewrite_trigger_import(&node.ident);
+    }
+}
+
+impl EmitEditCollector<'_> {
+    /// If `ident` names a registered trigger, replace just its bytes with the
+    /// enum the trigger's events were lifted into.
+    fn rewrite_trigger_import(&mut self, ident: &syn::Ident) {
+        if let Some(info) = self.registry.triggers.get(&ident.to_string()) {
+            self.edits
+                .push((ident.span().byte_range(), info.enum_name.clone()));
+            self.emit_rewritten = true;
+        }
+    }
 }
 
 /// Render a replacement expression with `prettyplease`, indenting continuation
@@ -1634,6 +1659,64 @@ impl Store {
             channels.contains("CmdEvent::Updated { value: value }.emit(&app)")
                 && !channels.contains("CmdBus::new"),
             "emit not rewritten:\n{channels}"
+        );
+        insta::assert_snapshot!(channels);
+    }
+
+    #[test]
+    fn rewrites_stale_event_trigger_imports() {
+        // The per-method event traits live in cmd.rs/sync.rs; channels.rs both
+        // imports the now-defunct `*EventTrigger` types and emits through them.
+        // The emit sites become `Enum::Variant.emit(&h)`, and the stale imports
+        // are rewritten to the generated enums so the file still resolves
+        // (issue #5). A grouped import has only its trigger segment rewritten.
+        let cmd = r#"
+#[taurpc::procedures(path = "cmd", event_trigger = CmdEventTrigger)]
+pub trait CmdMethods {
+    #[taurpc(event)]
+    async fn channel_data_set(channels: u8);
+}
+"#;
+        let sync = r#"
+#[taurpc::procedures(path = "sync", event_trigger = SyncEventTrigger)]
+pub trait SyncMethods {
+    #[taurpc(event)]
+    async fn buffer_set(buffer: u8);
+}
+"#;
+        let emit = r#"use crate::cmd::CmdEventTrigger;
+use crate::{colors::Color, sync::SyncEventTrigger};
+
+pub fn set(app: AppHandle, channels: u8, buffer: u8) -> Result<(), String> {
+    CmdEventTrigger::new(app.clone()).channel_data_set(channels).map_err(|e| e.to_string())?;
+    SyncEventTrigger::new(app).buffer_set(buffer).map_err(|e| e.to_string())?;
+    Ok(())
+}
+"#;
+        let out = transform_project(&[
+            ("cmd.rs".into(), cmd.into()),
+            ("sync.rs".into(), sync.into()),
+            ("channels.rs".into(), emit.into()),
+        ])
+        .expect("valid Rust");
+        let channels = &out[2].1;
+        assert!(
+            channels.contains("use crate::cmd::CmdEvent;"),
+            "single trigger import not rewritten:\n{channels}"
+        );
+        assert!(
+            channels.contains("use crate::{colors::Color, sync::SyncEvent};"),
+            "grouped trigger import not rewritten:\n{channels}"
+        );
+        assert!(
+            !channels.contains("EventTrigger"),
+            "a stale *EventTrigger reference remains:\n{channels}"
+        );
+        assert!(
+            channels.contains("CmdEvent::ChannelDataSet")
+                && channels.contains("SyncEvent::BufferSet")
+                && channels.matches(".emit(&app").count() == 2,
+            "emit sites not rewritten:\n{channels}"
         );
         insta::assert_snapshot!(channels);
     }

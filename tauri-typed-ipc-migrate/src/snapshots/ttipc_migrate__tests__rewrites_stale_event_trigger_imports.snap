@@ -1,0 +1,18 @@
+---
+source: tauri-typed-ipc-migrate/src/lib.rs
+expression: channels
+---
+use crate::cmd::CmdEvent;
+use crate::{colors::Color, sync::SyncEvent};
+
+pub fn set(app: AppHandle, channels: u8, buffer: u8) -> Result<(), String> {
+    CmdEvent::ChannelDataSet {
+        channels: channels,
+    }
+        .emit(&app.clone()).map_err(|e| e.to_string())?;
+    SyncEvent::BufferSet {
+        buffer: buffer,
+    }
+        .emit(&app).map_err(|e| e.to_string())?;
+    Ok(())
+}
