@@ -38,12 +38,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      # Tauri's Linux build links against the GTK/WebKitGTK stack, so the
-      # workspace pulls glib-sys et al. even with default-features = false.
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev libayatana-appindicator3-dev
+      - uses: ./.github/actions/install-tauri-deps
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
@@ -53,12 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      # Tauri's Linux build links against the GTK/WebKitGTK stack, so the
-      # workspace pulls glib-sys et al. even with default-features = false.
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev libayatana-appindicator3-dev
+      - uses: ./.github/actions/install-tauri-deps
       - uses: Swatinem/rust-cache@v2
       # --workspace pulls the non-published `tests` crate, which depends on
       # tauri with the "test" feature.
@@ -73,12 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      # Tauri's Linux build links against the GTK/WebKitGTK stack, so the
-      # workspace pulls glib-sys et al. even with default-features = false.
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev libayatana-appindicator3-dev
+      - uses: ./.github/actions/install-tauri-deps
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --all-features
 
@@ -90,12 +75,7 @@ jobs:
       # MSRV from [workspace.package] rust-version (specta rc.25 needs a recent
       # rustc; this matches rust-toolchain.toml).
       - uses: dtolnay/rust-toolchain@1.96
-      # Tauri's Linux build links against the GTK/WebKitGTK stack, so the
-      # workspace pulls glib-sys et al. even with default-features = false.
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev libayatana-appindicator3-dev
+      - uses: ./.github/actions/install-tauri-deps
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace
 
