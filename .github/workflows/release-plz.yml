@@ -43,6 +43,10 @@ jobs:
 
   release-pr:
     runs-on: ubuntu-latest
+    # Wait for the publish to finish before opening the next release PR.
+    # Otherwise this job races `release` and reads crates.io mid-publish (a
+    # lockstep workspace publishes crate-by-crate), opening a spurious bump PR.
+    needs: release
     permissions:
       contents: write
       pull-requests: write
