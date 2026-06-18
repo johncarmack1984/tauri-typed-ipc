@@ -70,6 +70,21 @@ fn transform_bigint() -> String {
     transform(black_box(BIGINT)).expect("valid Rust")
 }
 
+// The taurpc String-error drop-in: `Result<_, String>` is not flagged (ttipc
+// supports it out of the box), while a custom-error `Result` still is.
+const STRING_ERROR: &str = r#"
+#[taurpc::procedures(path = "cmd")]
+pub trait CmdMethods {
+    async fn save<R: Runtime>(app_handle: AppHandle<R>, note: String) -> Result<u8, String>;
+    async fn purge<R: Runtime>(app_handle: AppHandle<R>) -> Result<(), PurgeError>;
+}
+"#;
+
+#[divan::bench]
+fn transform_string_error() -> String {
+    transform(black_box(STRING_ERROR)).expect("valid Rust")
+}
+
 const DEASYNC: &str = r#"
 #[taurpc::procedures(path = "calc")]
 pub trait Calc {

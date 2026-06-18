@@ -3,7 +3,6 @@ source: tauri-typed-ipc-migrate/src/lib.rs
 expression: out
 ---
 // Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
-//   - errors: each `Result<_, E>` needs `E: ttipc::Error` (derive it on the error type).
 //   - imports: drop the now-unused `Runtime`; `Channel` is now `ttipc::Channel`.
 //   - bigint: a wire type uses a BigInt-style integer (`u64`/`i64`/`usize`/`i128`/...); ttipc's exporter rejects these (TauRPC's `BigIntExportBehavior` has no ttipc equivalent), so the bindings will not generate until you narrow them to a 32-bit-or-smaller integer (e.g. `u32`).
 //   - async injection: ttipc rejects an `async` procedure that takes `AppHandle`/`State<T>`; make it sync, or rework so the async body needs no injected handle/state.

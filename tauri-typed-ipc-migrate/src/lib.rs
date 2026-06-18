@@ -439,7 +439,7 @@ fn header(findings: &Findings) -> String {
     let mut notes: Vec<&str> = Vec::new();
     if findings.result_returns {
         notes.push(
-            "//   - errors: each `Result<_, E>` needs `E: ttipc::Error` (derive it on the error type).",
+            "//   - errors: a `Result<_, E>` with a custom error needs `E: ttipc::Error` (derive it on the enum); `Result<_, String>` works out of the box.",
         );
     }
     if findings.dropped_generics || findings.channels {
@@ -1247,6 +1247,9 @@ fn transform_signature(sig: &mut Signature, findings: &mut Findings) {
     sig.generics.params = Punctuated::new();
     sig.generics.where_clause = None;
 
+    // A `Result<_, E>` needs `E: ttipc::Error` -- except `Result<_, String>`,
+    // which ttipc supports out of the box (`impl ErrorSet for String`), so it is
+    // not flagged.
     if let syn::ReturnType::Type(_, ty) = &sig.output {
         if let Type::Path(type_path) = &**ty
             && type_path
@@ -1254,6 +1257,7 @@ fn transform_signature(sig: &mut Signature, findings: &mut Findings) {
                 .segments
                 .last()
                 .is_some_and(|seg| seg.ident == "Result")
+            && !result_error_is_string(type_path)
         {
             findings.result_returns = true;
         }
@@ -1344,6 +1348,27 @@ fn derives_specta_type(attrs: &[Attribute]) -> bool {
                 })
                 .unwrap_or(false)
     })
+}
+
+/// Is this return a `Result<_, String>`? Its error is `String`, which ttipc
+/// supports out of the box, so it needs no `E: ttipc::Error` follow-up. A
+/// `Result<T>` (one arg, error defaulted by an alias) is not matched -- the error
+/// is unknown, so it is flagged conservatively.
+fn result_error_is_string(type_path: &syn::TypePath) -> bool {
+    let Some(last) = type_path.path.segments.last() else {
+        return false;
+    };
+    let PathArguments::AngleBracketed(args) = &last.arguments else {
+        return false;
+    };
+    let mut types = args.args.iter().filter_map(|arg| match arg {
+        syn::GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    });
+    // `Result<T, E>` -- skip the success type, test the error type.
+    types
+        .nth(1)
+        .is_some_and(|error| last_segment_is(error, "String"))
 }
 
 /// `AppHandle<R>` becomes `AppHandle` (ttipc injects it by type);
@@ -2089,6 +2114,41 @@ pub trait Greeter {
         )
         .expect("valid Rust");
         insta::assert_snapshot!(out);
+    }
+
+    #[test]
+    fn does_not_flag_result_string_returns() {
+        // `Result<_, String>` works out of the box (ttipc has `impl ErrorSet for
+        // String`), so it earns no `E: ttipc::Error` follow-up. A custom error
+        // enum still does; a bare `Result<T>` (unknown error) is flagged too.
+        let string_error = transform(
+            r#"
+#[taurpc::procedures(path = "cmd")]
+pub trait CmdMethods {
+    async fn save<R: Runtime>(app_handle: AppHandle<R>, note: String) -> Result<u8, String>;
+}
+"#,
+        )
+        .expect("valid Rust");
+        assert!(
+            !string_error.contains("- errors:"),
+            "a Result<_, String> return should not be flagged:\n{string_error}"
+        );
+
+        let custom_error = transform(
+            r#"
+#[taurpc::procedures(path = "cmd")]
+pub trait CmdMethods {
+    async fn save<R: Runtime>(app_handle: AppHandle<R>) -> Result<u8, MyError>;
+    async fn load<R: Runtime>(app_handle: AppHandle<R>) -> Result<u8>;
+}
+"#,
+        )
+        .expect("valid Rust");
+        assert!(
+            custom_error.contains("- errors:"),
+            "a custom-error (or bare-Result) return should still be flagged:\n{custom_error}"
+        );
     }
 
     #[test]
