@@ -104,6 +104,31 @@ pub trait Guarded {
     fn peek(&self, channel: u16) -> u8;
 }
 
+/// The taurpc drop-in: a `Result<_, String>` procedure. This trait compiling at
+/// all proves `String: ErrorSet` (the macro requires it of every `Result` error);
+/// `String` rejects as a bare string on the wire, and the client types the catch
+/// as the built-in `string`. The impl drives the dispatch wire-parity test.
+#[procedures]
+pub trait Notes {
+    fn save(&self, note: String) -> Result<u8, String>;
+    fn count(&self) -> u8;
+}
+
+pub struct NotesImpl;
+
+impl Notes for NotesImpl {
+    fn save(&self, note: String) -> Result<u8, String> {
+        if note.is_empty() {
+            return Err("note is empty".to_string());
+        }
+        u8::try_from(note.len()).map_err(|_| "note too long".to_string())
+    }
+
+    fn count(&self) -> u8 {
+        0
+    }
+}
+
 /// Unit state standing in for a real procedure set owner.
 pub struct App;
 
