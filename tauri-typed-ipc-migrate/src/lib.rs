@@ -194,6 +194,9 @@ fn transform_surgical(
     let resolver_types = resolver_struct_idents(&file);
     let mut findings = Findings::default();
     let mut edits: Vec<(Range<usize>, String)> = Vec::new();
+    // The transformed view of every item, for cross-item liveness (which
+    // `use specta_typescript` imports the mount rewrite has orphaned).
+    let mut post: Vec<Item> = Vec::new();
 
     for item in &file.items {
         if is_item_level(item, &registry.derive_on) {
@@ -207,6 +210,7 @@ fn transform_surgical(
             let item_findings = transform_ast(&mut mini, project, &resolver_types, registry);
             merge_findings(&mut findings, &item_findings);
             let rendered = prettyplease::unparse(&mini).trim_end().to_string();
+            post.extend(mini.items.iter().cloned());
             edits.push((item.span().byte_range(), rendered));
         } else {
             // Leave the item verbatim; only its emit sites (if any) change.
@@ -231,6 +235,23 @@ fn transform_surgical(
             if collector.unresolved {
                 findings.emits_unresolved = true;
                 findings.transformed = true;
+            }
+            // Verbatim w.r.t. specta_typescript: emit rewriting never touches it.
+            post.push(item.clone());
+        }
+    }
+
+    // Drop a `use specta_typescript::..;` the mount rewrite has orphaned (its
+    // `export_config` consumer and config locals are gone). Whole-item, so a
+    // trailing newline rides along; the rest of the file stays byte-for-byte.
+    if findings.mount_rewritten && !references_specta_typescript(&post) {
+        for item in &file.items {
+            if is_specta_typescript_use(item) {
+                let mut range = item.span().byte_range();
+                if src[range.end..].starts_with('\n') {
+                    range.end += 1;
+                }
+                edits.push((range, String::new()));
             }
         }
     }
@@ -483,7 +504,7 @@ fn header(findings: &Findings) -> String {
     }
     if findings.mount_rewritten {
         notes.push(
-            "//   - mount: the TauRPC Router/handler became `ttipc::handler(..)` (a `-> Router` factory now returns `ttipc::Procedures`); generate bindings separately (`ttipc::Bindings`, replacing the dropped `export_config`), keep app state on `.manage(..)`, and drop any now-unused local config bindings.",
+            "//   - mount: the TauRPC Router/handler became `ttipc::handler(..)` (a `-> Router` factory now returns `ttipc::Procedures`); generate bindings separately (`ttipc::Bindings`, replacing the dropped `export_config`) and keep app state on `.manage(..)`.",
         );
     }
     if notes.is_empty() {
@@ -1374,21 +1395,201 @@ fn rewrite_mount(file: &mut syn::File, findings: &mut Findings) {
     if !has_taurpc_mount(file) {
         return;
     }
+    // Which locals does each fn use before the rewrite? The rewrite drops the
+    // Router config builders (`export_config(..)`, `semantic_types(..)`, ...),
+    // orphaning the locals that fed only those -- prune exactly those below, so a
+    // binding still used (or already dead before) is left alone.
+    let live_before: Vec<HashSet<String>> = file
+        .items
+        .iter()
+        .map(|item| match item {
+            Item::Fn(item_fn) => live_locals(&item_fn.block),
+            _ => HashSet::new(),
+        })
+        .collect();
+
     MountChains.visit_file_mut(file);
     RouterHandlers.visit_file_mut(file);
-    // A `build() -> Router<R>` factory now returns `ttipc::Procedures` (the
-    // collapsed `X.into_procedures().merge(..)` chain), its `<R>` dropped.
-    for item in &mut file.items {
-        if let Item::Fn(item_fn) = item
-            && returns_router(&item_fn.sig.output)
-        {
-            item_fn.sig.generics.params = Punctuated::new();
-            item_fn.sig.generics.where_clause = None;
-            item_fn.sig.output = syn::parse_quote!(-> ttipc::Procedures);
+
+    for (item, live) in file.items.iter_mut().zip(&live_before) {
+        if let Item::Fn(item_fn) = item {
+            // A `build() -> Router<R>` factory now returns `ttipc::Procedures` (the
+            // collapsed `X.into_procedures().merge(..)` chain), its `<R>` dropped.
+            if returns_router(&item_fn.sig.output) {
+                item_fn.sig.generics.params = Punctuated::new();
+                item_fn.sig.generics.where_clause = None;
+                item_fn.sig.output = syn::parse_quote!(-> ttipc::Procedures);
+            }
+            // Drop the `let` bindings the dropped config builders just orphaned.
+            prune_dead_config_locals(&mut item_fn.block, live);
         }
+    }
+    // `export_config` was specta_typescript's only consumer; with it and its config
+    // locals gone, the import is dead. (Whole-file path only -- the surgical path
+    // drops it in `transform_surgical`, the one place that sees every item.)
+    if !references_specta_typescript(&file.items) {
+        file.items.retain(|item| !is_specta_typescript_use(item));
     }
     findings.transformed = true;
     findings.mount_rewritten = true;
+}
+
+/// The `let`-bound idents referenced somewhere in `block` -- its live locals. A
+/// binding never referenced is already dead, not something the mount rewrite
+/// killed, so [`prune_dead_config_locals`] leaves it alone.
+fn live_locals(block: &syn::Block) -> HashSet<String> {
+    let uses = ident_use_counts(block);
+    block
+        .stmts
+        .iter()
+        .filter_map(local_binding_name)
+        .filter(|name| uses.get(name).copied().unwrap_or(0) > 0)
+        .collect()
+}
+
+/// Remove every top-level `let x = ..;` that was live before the mount rewrite
+/// but is unused after it -- i.e. orphaned by a dropped config builder. Repeats
+/// to a fixed point, so dropping `bindings` then frees `formatter`/`bigint`.
+fn prune_dead_config_locals(block: &mut syn::Block, live_before: &HashSet<String>) {
+    loop {
+        let uses = ident_use_counts(block);
+        let before = block.stmts.len();
+        block.stmts.retain(|stmt| match local_binding_name(stmt) {
+            Some(name) => {
+                !(live_before.contains(&name) && uses.get(&name).copied().unwrap_or(0) == 0)
+            }
+            None => true,
+        });
+        if block.stmts.len() == before {
+            break;
+        }
+    }
+}
+
+/// The name bound by a simple `let x = ..;` (or `let x: T = ..;`); `None` for a
+/// non-binding statement or a pattern we do not prune (tuples, `_`, sub-patterns).
+fn local_binding_name(stmt: &syn::Stmt) -> Option<String> {
+    let syn::Stmt::Local(local) = stmt else {
+        return None;
+    };
+    let pat = match &local.pat {
+        syn::Pat::Type(pat_type) => &*pat_type.pat,
+        other => other,
+    };
+    match pat {
+        syn::Pat::Ident(pat_ident) if pat_ident.subpat.is_none() => {
+            Some(pat_ident.ident.to_string())
+        }
+        _ => None,
+    }
+}
+
+/// How many times each single-ident value path is referenced in `block` -- a
+/// local's use count (its `let` pattern is a `Pat`, not an `Expr`, so it does
+/// not count itself).
+fn ident_use_counts(block: &syn::Block) -> HashMap<String, usize> {
+    let mut counter = IdentUses {
+        counts: HashMap::new(),
+    };
+    counter.visit_block(block);
+    counter.counts
+}
+
+struct IdentUses {
+    counts: HashMap<String, usize>,
+}
+
+impl<'ast> Visit<'ast> for IdentUses {
+    fn visit_expr_path(&mut self, node: &'ast syn::ExprPath) {
+        if let Some(ident) = node.path.get_ident() {
+            *self.counts.entry(ident.to_string()).or_default() += 1;
+        }
+        syn::visit::visit_expr_path(self, node);
+    }
+}
+
+/// Is this a `use specta_typescript::..;` import? Its only role in a TauRPC mount
+/// is the `export_config` bindings config, which ttipc generates separately.
+fn is_specta_typescript_use(item: &Item) -> bool {
+    let Item::Use(item_use) = item else {
+        return false;
+    };
+    match &item_use.tree {
+        syn::UseTree::Path(path) => path.ident == "specta_typescript",
+        syn::UseTree::Name(name) => name.ident == "specta_typescript",
+        _ => false,
+    }
+}
+
+/// Does any non-`use` item still reference `specta_typescript` (the crate, or a
+/// name imported from it)? Decides whether its now-dead import can be dropped.
+fn references_specta_typescript(items: &[Item]) -> bool {
+    let needles = specta_typescript_needles(items);
+    if needles.is_empty() {
+        return false;
+    }
+    let mut scan = NeedleScan {
+        needles: &needles,
+        hit: false,
+    };
+    for item in items {
+        if !matches!(item, Item::Use(_)) {
+            scan.visit_item(item);
+        }
+    }
+    scan.hit
+}
+
+/// `specta_typescript` plus every name a `use specta_typescript::..;` brings into
+/// scope (so `Typescript`, `Layout`, ... are recognized as references too).
+fn specta_typescript_needles(items: &[Item]) -> HashSet<String> {
+    let mut needles = HashSet::new();
+    for item in items {
+        if is_specta_typescript_use(item) {
+            needles.insert("specta_typescript".to_string());
+            if let Item::Use(item_use) = item {
+                collect_use_leaves(&item_use.tree, &mut needles);
+            }
+        }
+    }
+    needles
+}
+
+/// The terminal names a use tree imports (the leaf of each path, or a rename).
+fn collect_use_leaves(tree: &syn::UseTree, out: &mut HashSet<String>) {
+    match tree {
+        syn::UseTree::Path(path) => collect_use_leaves(&path.tree, out),
+        syn::UseTree::Name(name) => {
+            out.insert(name.ident.to_string());
+        }
+        syn::UseTree::Rename(rename) => {
+            out.insert(rename.rename.to_string());
+        }
+        syn::UseTree::Group(group) => {
+            for tree in &group.items {
+                collect_use_leaves(tree, out);
+            }
+        }
+        syn::UseTree::Glob(_) => {}
+    }
+}
+
+struct NeedleScan<'a> {
+    needles: &'a HashSet<String>,
+    hit: bool,
+}
+
+impl<'ast> Visit<'ast> for NeedleScan<'_> {
+    fn visit_path(&mut self, node: &'ast syn::Path) {
+        if node
+            .segments
+            .iter()
+            .any(|seg| self.needles.contains(&seg.ident.to_string()))
+        {
+            self.hit = true;
+        }
+        syn::visit::visit_path(self, node);
+    }
 }
 
 /// Does this function return a TauRPC `Router<..>` (the factory shape)?
@@ -2503,7 +2704,65 @@ pub fn build<R: Runtime>() -> Router<R> {
             out.contains("fn build() -> ttipc::Procedures"),
             "the factory returns ttipc::Procedures, <R> dropped:\n{out}"
         );
+        assert!(
+            !out.contains("let typescript"),
+            "the orphaned export_config local was not pruned:\n{out}"
+        );
         insta::assert_snapshot!(out);
+    }
+
+    #[test]
+    fn drops_orphaned_export_config_locals_and_import() {
+        // lux's mount: the bindings config is built from specta_typescript locals
+        // fed only into `export_config`. Dropping that call orphans them, so the
+        // codemod prunes the locals (transitively -- removing `bindings` frees
+        // `formatter`/`bigint`) and the now-unused `use specta_typescript` import,
+        // while keeping the live state local (issue #7). Surgical path: the rest
+        // of the file stays byte-for-byte.
+        let src = r#"use specta_typescript::Typescript;
+use tauri::Manager;
+
+pub fn run() {
+    let default_buffer = make_buffer();
+    let formatter = specta_typescript::formatter::prettier;
+    let bigint = specta_typescript::BigIntExportBehavior::Number;
+    let bindings = Typescript::default().formatter(formatter).bigint(bigint);
+    let router = taurpc::Router::new()
+        .export_config(bindings)
+        .merge(SyncEndpoint.into_handler())
+        .merge(CmdEndpoint.into_handler());
+    tauri::Builder::default()
+        .manage(default_buffer)
+        .invoke_handler(router.into_handler())
+        .run(tauri::generate_context!())
+        .expect("error");
+}
+"#;
+        let out = transform_project(&[("lib.rs".into(), src.into())]).expect("valid Rust");
+        let lib = &out[0].1;
+        assert!(
+            !lib.contains("let formatter")
+                && !lib.contains("let bigint")
+                && !lib.contains("let bindings")
+                && !lib.contains(".export_config("),
+            "dead config locals not pruned:\n{lib}"
+        );
+        assert!(
+            !lib.contains("specta_typescript"),
+            "dead specta_typescript import not dropped:\n{lib}"
+        );
+        assert!(
+            lib.contains("use tauri::Manager;")
+                && lib.contains("let default_buffer = make_buffer();")
+                && lib.contains(".manage(default_buffer)"),
+            "an unrelated import or live local was wrongly dropped:\n{lib}"
+        );
+        assert!(
+            lib.contains("SyncEndpoint.into_procedures().merge(CmdEndpoint.into_procedures())")
+                && lib.contains("ttipc::handler(router)"),
+            "mount not rewritten:\n{lib}"
+        );
+        insta::assert_snapshot!(lib);
     }
 
     #[test]

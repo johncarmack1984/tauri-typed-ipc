@@ -5,13 +5,14 @@ expression: lib
 // Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
 //   - mount: the TauRPC Router/handler became `ttipc::handler(..)` (a `-> Router` factory now returns `ttipc::Procedures`); generate bindings separately (`ttipc::Bindings`, replacing the dropped `export_config`) and keep app state on `.manage(..)`.
 
+use tauri::Manager;
 
 pub fn run() {
-    let handler = ttipc::handler(crate::router::build());
-    let unrelated = some_lib::Thing::new().into_handler();
+    let default_buffer = make_buffer();
+    let router = SyncEndpoint.into_procedures().merge(CmdEndpoint.into_procedures());
     tauri::Builder::default()
-        .manage(unrelated)
-        .invoke_handler(handler)
+        .manage(default_buffer)
+        .invoke_handler(ttipc::handler(router))
         .run(tauri::generate_context!())
-        .unwrap();
+        .expect("error");
 }
