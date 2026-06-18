@@ -3,7 +3,7 @@ source: tauri-typed-ipc-migrate/src/lib.rs
 expression: out
 ---
 // Migrated from TauRPC by ttipc-migrate. Manual follow-ups:
-//   - errors: each `Result<_, E>` needs `E: ttipc::Error` (derive it on the error type).
+//   - errors: a `Result<_, E>` with a custom error needs `E: ttipc::Error` (derive it on the enum); `Result<_, String>` works out of the box.
 //   - imports: drop the now-unused `Runtime`; `Channel` is now `ttipc::Channel`.
 //   - de-async: methods with no blocking `.await` were made sync (ttipc's default), and their `.await`s on now-sync siblings were dropped.
 
