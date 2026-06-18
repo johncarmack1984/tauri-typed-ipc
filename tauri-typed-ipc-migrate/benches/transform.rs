@@ -268,6 +268,8 @@ pub trait Cmd {
 "#;
 
 const EMIT_FILE: &str = r#"// domain logic
+use crate::cmd::CmdBus;
+
 impl Store {
     fn touch(&self, app: AppHandle, value: u8) -> Result<(), String> {
         CmdBus::new(app).updated(value).map_err(|e| e.to_string())?;
