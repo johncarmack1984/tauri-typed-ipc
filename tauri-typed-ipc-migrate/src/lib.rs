@@ -100,6 +100,17 @@ fn transform_ast(
                     .retain(|attr| !is_taurpc_attr(attr, "ipc_type"));
             } else {
                 convert_ipc_type(&mut item_struct.attrs, &mut findings);
+                // A wire struct (it derives `specta::Type`, now or via the
+                // conversion above) with a BigInt-style field is rejected by the
+                // exporter -- flag it.
+                if derives_specta_type(&item_struct.attrs)
+                    && item_struct
+                        .fields
+                        .iter()
+                        .any(|field| type_has_bigint(&field.ty))
+                {
+                    findings.bigint_wire = true;
+                }
             }
         }
     }
@@ -329,6 +340,7 @@ fn merge_findings(into: &mut Findings, from: &Findings) {
     into.result_returns |= from.result_returns;
     into.dropped_generics |= from.dropped_generics;
     into.channels |= from.channels;
+    into.bigint_wire |= from.bigint_wire;
     into.deasynced |= from.deasynced;
     into.async_injection |= from.async_injection;
     into.window_param |= from.window_param;
@@ -350,6 +362,7 @@ struct Findings {
     result_returns: bool,
     dropped_generics: bool,
     channels: bool,
+    bigint_wire: bool,
     deasynced: bool,
     async_injection: bool,
     window_param: bool,
@@ -385,6 +398,11 @@ fn header(findings: &Findings) -> String {
     if findings.ipc_type_converted {
         notes.push(
             "//   - dto deps: converted `ipc_type` structs derive `serde` and `specta::Type` directly; add `serde` (with `derive`) and `specta` as dependencies.",
+        );
+    }
+    if findings.bigint_wire {
+        notes.push(
+            "//   - bigint: a wire type uses a BigInt-style integer (`u64`/`i64`/`usize`/`i128`/...); ttipc's exporter rejects these (TauRPC's `BigIntExportBehavior` has no ttipc equivalent), so the bindings will not generate until you narrow them to a 32-bit-or-smaller integer (e.g. `u32`).",
         );
     }
     if findings.deasynced {
@@ -1153,15 +1171,21 @@ fn transform_signature(sig: &mut Signature, findings: &mut Findings) {
     sig.generics.params = Punctuated::new();
     sig.generics.where_clause = None;
 
-    if let syn::ReturnType::Type(_, ty) = &sig.output
-        && let Type::Path(type_path) = &**ty
-        && type_path
-            .path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "Result")
-    {
-        findings.result_returns = true;
+    if let syn::ReturnType::Type(_, ty) = &sig.output {
+        if let Type::Path(type_path) = &**ty
+            && type_path
+                .path
+                .segments
+                .last()
+                .is_some_and(|seg| seg.ident == "Result")
+        {
+            findings.result_returns = true;
+        }
+        // A BigInt-style return (`-> usize`, `Result<u64, _>`) is a wire type the
+        // ttipc exporter rejects -- flag it.
+        if type_has_bigint(ty) {
+            findings.bigint_wire = true;
+        }
     }
 
     let has_receiver = matches!(sig.inputs.first(), Some(FnArg::Receiver(_)));
@@ -1179,9 +1203,71 @@ fn transform_signature(sig: &mut Signature, findings: &mut Findings) {
 
     for input in &mut sig.inputs {
         if let FnArg::Typed(pat_type) = input {
+            // A BigInt-style wire argument (`channel_number: usize`) is rejected by
+            // the exporter; injected params (`AppHandle`/`State`) are not on the
+            // wire, so skip them.
+            if !is_injected_ty(&pat_type.ty) && type_has_bigint(&pat_type.ty) {
+                findings.bigint_wire = true;
+            }
             rewrite_type(&mut pat_type.ty, findings);
         }
     }
+}
+
+/// The BigInt-style integer primitives specta forbids by default (32-bit and
+/// smaller are fine). The ttipc exporter rejects these in any wire type, with no
+/// TauRPC-style `BigIntExportBehavior` to opt out.
+const BIGINT_INTS: &[&str] = &["u64", "i64", "u128", "i128", "usize", "isize"];
+
+/// Does `ty` mention a BigInt-style integer anywhere in its own structure -- the
+/// bare type, a generic argument (`Vec<u64>`), a tuple/array/slice element, or
+/// behind a reference? (It does not descend into named types' definitions.)
+fn type_has_bigint(ty: &Type) -> bool {
+    match ty {
+        Type::Path(type_path) => {
+            let Some(last) = type_path.path.segments.last() else {
+                return false;
+            };
+            if BIGINT_INTS.contains(&last.ident.to_string().as_str()) {
+                return true;
+            }
+            if let PathArguments::AngleBracketed(args) = &last.arguments {
+                return args.args.iter().any(|arg| {
+                    matches!(arg, syn::GenericArgument::Type(inner) if type_has_bigint(inner))
+                });
+            }
+            false
+        }
+        Type::Reference(reference) => type_has_bigint(&reference.elem),
+        Type::Slice(slice) => type_has_bigint(&slice.elem),
+        Type::Array(array) => type_has_bigint(&array.elem),
+        Type::Tuple(tuple) => tuple.elems.iter().any(type_has_bigint),
+        Type::Group(group) => type_has_bigint(&group.elem),
+        Type::Paren(paren) => type_has_bigint(&paren.elem),
+        _ => false,
+    }
+}
+
+/// Does the struct derive `specta::Type` (the wire-type marker)? Both an
+/// already-`Type` struct and a converted `#[taurpc::ipc_type]` one qualify.
+fn derives_specta_type(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        attr.path().is_ident("derive")
+            && attr
+                .parse_args_with(Punctuated::<syn::Path, Comma>::parse_terminated)
+                .map(|paths| {
+                    paths.iter().any(|path| {
+                        let last_is_type =
+                            path.segments.last().is_some_and(|seg| seg.ident == "Type");
+                        let specta_rooted = path
+                            .segments
+                            .first()
+                            .is_some_and(|seg| seg.ident == "specta");
+                        last_is_type && (specta_rooted || path.segments.len() == 1)
+                    })
+                })
+                .unwrap_or(false)
+    })
 }
 
 /// `AppHandle<R>` becomes `AppHandle` (ttipc injects it by type);
@@ -1944,6 +2030,40 @@ impl Users for UsersImpl {
         assert!(
             out.contains("serde::Serialize") && out.contains("specta::Type"),
             "expected the ipc_type DTO to gain the derives:\n{out}"
+        );
+        insta::assert_snapshot!(out);
+    }
+
+    #[test]
+    fn flags_bigint_wire_types() {
+        // TauRPC apps carry BigInt-style integers on the wire and opt out with
+        // `BigIntExportBehavior::Number`; ttipc has no equivalent and its exporter
+        // rejects them. Flag a `usize` procedure arg and a `usize` wire-struct
+        // field so the migrator narrows them (issue #8). A 32-bit-or-smaller
+        // integer (`value: u8`, `count: u32`) is fine and not flagged.
+        let out = transform(
+            r#"
+#[derive(serde::Serialize, specta::Type, Clone)]
+pub struct Channel {
+    pub channel_number: usize,
+    pub count: u32,
+    pub label: String,
+}
+
+#[taurpc::procedures(path = "cmd")]
+pub trait CmdMethods {
+    async fn update_channel_value<R: Runtime>(
+        app_handle: AppHandle<R>,
+        channel_number: usize,
+        value: u8,
+    ) -> Result<u8, String>;
+}
+"#,
+        )
+        .expect("valid Rust");
+        assert!(
+            out.contains("//   - bigint:"),
+            "expected a BigInt wire-type follow-up note:\n{out}"
         );
         insta::assert_snapshot!(out);
     }
