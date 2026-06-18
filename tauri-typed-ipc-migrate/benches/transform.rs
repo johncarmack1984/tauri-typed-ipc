@@ -126,6 +126,49 @@ fn transform_deasync_transitive() -> String {
     transform(black_box(TRANSITIVE)).expect("valid Rust")
 }
 
+// Cross-file de-async: a wrapper in one file awaits a sibling de-async'd in
+// another; the project-wide pass strips the `.await` and de-asyncs the wrapper.
+const SYNC_FILE: &str = r#"
+#[taurpc::procedures(path = "sync")]
+pub trait SyncMethods {
+    async fn sync_buffer<R: Runtime>(app_handle: AppHandle<R>) -> Result<u8, String>;
+    async fn sync_state<R: Runtime>(app_handle: AppHandle<R>) -> Result<String, String>;
+}
+
+#[taurpc::resolvers]
+impl SyncMethods for SyncEndpoint {
+    async fn sync_buffer<R: Runtime>(self, app_handle: AppHandle<R>) -> Result<u8, String> {
+        Ok(0)
+    }
+    async fn sync_state<R: Runtime>(self, app_handle: AppHandle<R>) -> Result<String, String> {
+        SyncEndpoint.sync_buffer(app_handle.clone()).await?;
+        Ok("ok".into())
+    }
+}
+"#;
+const CMD_FILE: &str = r#"
+#[taurpc::procedures(path = "cmd")]
+pub trait CmdMethods {
+    async fn sync_state<R: Runtime>(app_handle: AppHandle<R>) -> Result<String, String>;
+}
+
+#[taurpc::resolvers]
+impl CmdMethods for CmdEndpoint {
+    async fn sync_state<R: Runtime>(self, app: AppHandle<R>) -> Result<String, String> {
+        SyncEndpoint.sync_state(app.clone()).await
+    }
+}
+"#;
+
+#[divan::bench]
+fn transform_cross_file_deasync() -> Vec<(String, String)> {
+    transform_project(black_box(&[
+        ("sync.rs".to_string(), SYNC_FILE.to_string()),
+        ("cmd.rs".to_string(), CMD_FILE.to_string()),
+    ]))
+    .expect("valid Rust")
+}
+
 const EVENTS: &str = r#"
 #[taurpc::procedures(path = "app", event_trigger = AppTrigger)]
 pub trait App {

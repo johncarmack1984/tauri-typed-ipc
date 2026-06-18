@@ -40,27 +40,27 @@ pub fn transform(src: &str) -> Result<String, syn::Error> {
     collect_enums(&file, &mut registry.enums);
     collect_router_factories(&file, &mut registry.router_factories);
     extract_events(&file, &mut registry);
-    Ok(render(file, &registry))
+    let project = collect_project_deasync(std::slice::from_ref(&file));
+    Ok(render(file, &registry, &project))
 }
 
 /// Preview a whole file: transform it and re-emit via `prettyplease`. This
 /// reformats the file and drops non-doc comments -- fine for stdout, but not for
 /// editing real files in place; [`transform_surgical`] is the in-place path.
-fn render(mut file: syn::File, registry: &EventRegistry) -> String {
-    let deasyncable = collect_deasyncable(&file);
+fn render(mut file: syn::File, registry: &EventRegistry, project: &ProjectDeasync) -> String {
     let resolver_types = resolver_struct_idents(&file);
-    let findings = transform_ast(&mut file, &deasyncable, &resolver_types, registry);
+    let findings = transform_ast(&mut file, project, &resolver_types, registry);
     format!("{}{}", header(&findings), prettyplease::unparse(&file))
 }
 
-/// Apply every transform to a parsed file, given the file-level analysis
+/// Apply every transform to a parsed file, given the project-wide analysis
 /// (de-asyncable methods, resolver struct idents) and the event registry.
 /// Returns what it did, for the header. Used for the whole file (preview) and,
 /// per item, on a one-item file (surgical) -- so the analysis is passed in rather
 /// than recomputed, keeping a single item's view consistent with the whole file.
 fn transform_ast(
     file: &mut syn::File,
-    deasyncable: &HashSet<(String, String)>,
+    project: &ProjectDeasync,
     resolver_types: &[syn::Ident],
     registry: &EventRegistry,
 ) -> Findings {
@@ -73,14 +73,14 @@ fn transform_ast(
             Item::Trait(item_trait) if has_taurpc_procedures(item_trait) => {
                 findings.transformed = true;
                 if let Some(event_enum) =
-                    transform_trait(item_trait, deasyncable, registry, &mut findings)
+                    transform_trait(item_trait, &project.by_trait, registry, &mut findings)
                 {
                     event_enums.push((index, event_enum));
                 }
             }
             Item::Impl(item_impl) if has_taurpc_resolvers(item_impl) => {
                 findings.transformed = true;
-                transform_resolver_impl(item_impl, deasyncable, &mut findings);
+                transform_resolver_impl(item_impl, project, &mut findings);
             }
             _ => {}
         }
@@ -171,9 +171,12 @@ pub fn transform_project(files: &[(String, String)]) -> Result<Vec<(String, Stri
     for file in &parsed {
         extract_events(file, &mut registry);
     }
+    // De-async spans every file, so a thin wrapper de-asyncs once its cross-file
+    // sibling does (issue #6); computed once over the whole project.
+    let project = collect_project_deasync(&parsed);
     files
         .iter()
-        .map(|(path, src)| Ok((path.clone(), transform_surgical(src, &registry)?)))
+        .map(|(path, src)| Ok((path.clone(), transform_surgical(src, &registry, &project)?)))
         .collect()
 }
 
@@ -182,9 +185,12 @@ pub fn transform_project(files: &[(String, String)]) -> Result<Vec<(String, Stri
 /// code) byte-for-byte. Migrated taurpc items and the mount fn are re-emitted
 /// whole (their inner non-doc comments are lost); emit sites elsewhere are
 /// replaced expression-by-expression so the surrounding code is untouched.
-fn transform_surgical(src: &str, registry: &EventRegistry) -> Result<String, syn::Error> {
+fn transform_surgical(
+    src: &str,
+    registry: &EventRegistry,
+    project: &ProjectDeasync,
+) -> Result<String, syn::Error> {
     let file: syn::File = syn::parse_str(src)?;
-    let deasyncable = collect_deasyncable(&file);
     let resolver_types = resolver_struct_idents(&file);
     let mut findings = Findings::default();
     let mut edits: Vec<(Range<usize>, String)> = Vec::new();
@@ -198,7 +204,7 @@ fn transform_surgical(src: &str, registry: &EventRegistry) -> Result<String, syn
                 attrs: Vec::new(),
                 items: vec![item.clone()],
             };
-            let item_findings = transform_ast(&mut mini, &deasyncable, &resolver_types, registry);
+            let item_findings = transform_ast(&mut mini, project, &resolver_types, registry);
             merge_findings(&mut findings, &item_findings);
             let rendered = prettyplease::unparse(&mini).trim_end().to_string();
             edits.push((item.span().byte_range(), rendered));
@@ -932,25 +938,19 @@ fn custom_event_trigger(item_trait: &ItemTrait) -> Option<String> {
 /// trait's are, and keep the bodies and other attributes (e.g. `#[instrument]`).
 fn transform_resolver_impl(
     item_impl: &mut ItemImpl,
-    deasyncable: &HashSet<(String, String)>,
+    project: &ProjectDeasync,
     findings: &mut Findings,
 ) {
     item_impl
         .attrs
         .retain(|attr| !is_taurpc_attr(attr, "resolvers"));
     let trait_name = impl_trait_name(item_impl).unwrap_or_default();
-    let self_ty = self_type_ident(item_impl);
-    // The method names being made sync in this impl, so their `.await`s can drop.
-    let deasynced_here: HashSet<String> = deasyncable
-        .iter()
-        .filter(|(t, _)| *t == trait_name)
-        .map(|(_, m)| m.clone())
-        .collect();
+    let self_ty = self_type_ident(item_impl).map(|ident| ident.to_string());
     for item in &mut item_impl.items {
         if let ImplItem::Fn(method) = item {
             transform_signature(&mut method.sig, findings);
-            deasync(&mut method.sig, &trait_name, deasyncable, findings);
-            strip_sibling_awaits(&mut method.block, self_ty.as_ref(), &deasynced_here);
+            deasync(&mut method.sig, &trait_name, &project.by_trait, findings);
+            strip_sibling_awaits(&mut method.block, self_ty.as_deref(), &project.by_type);
             flag_async_injection(&method.sig, findings);
         }
     }
@@ -986,8 +986,8 @@ fn last_segment_is(ty: &Type, name: &str) -> bool {
         if type_path.path.segments.last().is_some_and(|seg| seg.ident == name))
 }
 
-/// Make a method sync when it is in the de-asyncable set (see
-/// [`collect_deasyncable`]).
+/// Make a method sync when its `(trait, method)` is in the project's de-asyncable
+/// set (see [`collect_project_deasync`]).
 fn deasync(
     sig: &mut Signature,
     trait_name: &str,
@@ -1002,102 +1002,122 @@ fn deasync(
     }
 }
 
-/// The `(trait, method)` pairs that can be made sync. A resolver method is
-/// de-asyncable when its body has no blocking `.await` -- one on anything but a
-/// call to a de-asyncable sibling. This is transitive: a method awaiting only
-/// siblings that do no real async work is itself de-asyncable. Only same-file
-/// resolver impls are visible; a method whose impl is elsewhere stays `async`
-/// (the safe default).
-fn collect_deasyncable(file: &syn::File) -> HashSet<(String, String)> {
-    let mut set = HashSet::new();
-    for item in &file.items {
-        if let Item::Impl(item_impl) = item
-            && has_taurpc_resolvers(item_impl)
-            && let Some(trait_name) = impl_trait_name(item_impl)
-        {
-            for method in deasyncable_in_impl(item_impl) {
-                set.insert((trait_name.clone(), method));
+/// Project-wide de-async analysis: which resolver methods can be made sync.
+/// ttipc's default is sync, and an `async` method whose every `.await` targets a
+/// sibling resolver doing no real async work is itself sync. This spans every
+/// file, so a thin wrapper in one file (`OtherEndpoint.foo(..).await`) de-asyncs
+/// once `foo` does in another; a method with a blocking await (a real future)
+/// stays `async`, the safe default. Keyed by resolver self-type, then projected
+/// onto the trait (for signatures) and kept by-type (for `.await` stripping).
+fn collect_project_deasync(files: &[syn::File]) -> ProjectDeasync {
+    // Every async resolver method body, the async-method names per self-type (so
+    // a cross-type await resolves), and each (self-type, method)'s trait.
+    let mut async_bodies: Vec<(String, String, &syn::Block)> = Vec::new();
+    let mut async_by_type: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut trait_of: HashMap<(String, String), String> = HashMap::new();
+    for file in files {
+        for item in &file.items {
+            if let Item::Impl(item_impl) = item
+                && has_taurpc_resolvers(item_impl)
+                && let Some(self_ty) = self_type_ident(item_impl)
+                && let Some(trait_name) = impl_trait_name(item_impl)
+            {
+                let self_ty = self_ty.to_string();
+                for impl_item in &item_impl.items {
+                    if let ImplItem::Fn(method) = impl_item {
+                        let name = method.sig.ident.to_string();
+                        trait_of.insert((self_ty.clone(), name.clone()), trait_name.clone());
+                        if method.sig.asyncness.is_some() {
+                            async_by_type
+                                .entry(self_ty.clone())
+                                .or_default()
+                                .insert(name.clone());
+                            async_bodies.push((self_ty.clone(), name, &method.block));
+                        }
+                    }
+                }
             }
         }
     }
-    set
-}
 
-/// The async method names in one resolver impl that can be made sync. A method
-/// qualifies when it has no blocking `.await` and every sibling it awaits also
-/// qualifies; the fixed point below shrinks the candidate set until it is stable.
-fn deasyncable_in_impl(item_impl: &ItemImpl) -> HashSet<String> {
-    let self_ty = self_type_ident(item_impl);
-    let async_methods: HashSet<String> = item_impl
-        .items
-        .iter()
-        .filter_map(async_method_name)
-        .collect();
-
-    // Per async method: does it await anything that is not a sibling call
-    // (blocking), and which siblings does it await?
-    let mut blocking: HashSet<String> = HashSet::new();
-    let mut awaited_siblings: HashMap<String, HashSet<String>> = HashMap::new();
-    for impl_item in &item_impl.items {
-        if let ImplItem::Fn(method) = impl_item
-            && method.sig.asyncness.is_some()
-        {
-            let mut classifier = AwaitClassifier {
-                self_ty: self_ty.as_ref(),
-                siblings: &async_methods,
-                blocking: false,
-                targets: HashSet::new(),
-            };
-            classifier.visit_block(&method.block);
-            let name = method.sig.ident.to_string();
-            if classifier.blocking {
-                blocking.insert(name.clone());
-            }
-            awaited_siblings.insert(name, classifier.targets);
+    // Classify each async method's awaits: sibling-resolver edges vs blocking.
+    let mut blocking: HashSet<(String, String)> = HashSet::new();
+    let mut edges: HashMap<(String, String), HashSet<(String, String)>> = HashMap::new();
+    for (self_ty, name, block) in &async_bodies {
+        let mut classifier = AwaitClassifier {
+            self_ty,
+            async_by_type: &async_by_type,
+            blocking: false,
+            targets: HashSet::new(),
+        };
+        classifier.visit_block(block);
+        let node = (self_ty.clone(), name.clone());
+        if classifier.blocking {
+            blocking.insert(node.clone());
         }
+        edges.insert(node, classifier.targets);
     }
 
     // Start from every async method with no blocking await, then drop any whose
     // awaited siblings are not (or no longer) de-asyncable until nothing changes.
-    let mut deasyncable: HashSet<String> = async_methods
-        .into_iter()
-        .filter(|m| !blocking.contains(m))
+    let mut deasyncable: HashSet<(String, String)> = async_bodies
+        .iter()
+        .map(|(self_ty, name, _)| (self_ty.clone(), name.clone()))
+        .filter(|node| !blocking.contains(node))
         .collect();
     loop {
         let before = deasyncable.len();
         let current = deasyncable.clone();
-        deasyncable.retain(|m| awaited_siblings[m].iter().all(|t| current.contains(t)));
+        deasyncable.retain(|node| edges[node].iter().all(|t| current.contains(t)));
         if deasyncable.len() == before {
             break;
         }
     }
-    deasyncable
-}
 
-/// The method name of an async impl method.
-fn async_method_name(item: &ImplItem) -> Option<String> {
-    match item {
-        ImplItem::Fn(method) if method.sig.asyncness.is_some() => {
-            Some(method.sig.ident.to_string())
+    let mut project = ProjectDeasync::default();
+    for node in deasyncable {
+        if let Some(trait_name) = trait_of.get(&node) {
+            project
+                .by_trait
+                .insert((trait_name.clone(), node.1.clone()));
         }
-        _ => None,
+        project.by_type.entry(node.0).or_default().insert(node.1);
     }
+    project
 }
 
-/// Classifies the `.await`s in one method body: each is either a call to a
-/// sibling resolver (a `target`) or `blocking` (anything else -- a real future).
+/// The de-asyncable resolver methods, projected two ways.
+#[derive(Default)]
+struct ProjectDeasync {
+    /// `(trait, method)` pairs made sync -- drives signature de-async on both the
+    /// trait declaration and the resolver impl.
+    by_trait: HashSet<(String, String)>,
+    /// Resolver self-type -> its methods made sync -- drives `.await` stripping,
+    /// including a cross-type `OtherEndpoint.method().await`.
+    by_type: HashMap<String, HashSet<String>>,
+}
+
+/// Classifies the `.await`s in one method body: each is a call to a sibling
+/// resolver (an edge to that `(self-type, method)`) or `blocking` (a real
+/// future). The receiver resolves to a self-type via [`resolve_call_target`]:
+/// `self`/`Self` to the method's own type, a resolver value path to its type.
 struct AwaitClassifier<'a> {
-    self_ty: Option<&'a syn::Ident>,
-    siblings: &'a HashSet<String>,
+    self_ty: &'a str,
+    async_by_type: &'a HashMap<String, HashSet<String>>,
     blocking: bool,
-    targets: HashSet<String>,
+    targets: HashSet<(String, String)>,
 }
 
 impl<'a, 'ast> Visit<'ast> for AwaitClassifier<'a> {
     fn visit_expr_await(&mut self, node: &'ast syn::ExprAwait) {
-        match self_call_method(&node.base, self.self_ty) {
-            Some(name) if self.siblings.contains(&name) => {
-                self.targets.insert(name);
+        match resolve_call_target(&node.base, Some(self.self_ty)) {
+            Some((ty, method))
+                if self
+                    .async_by_type
+                    .get(&ty)
+                    .is_some_and(|methods| methods.contains(&method)) =>
+            {
+                self.targets.insert((ty, method));
             }
             _ => self.blocking = true,
         }
@@ -1114,50 +1134,60 @@ fn impl_trait_name(item_impl: &ItemImpl) -> Option<String> {
         .map(|seg| seg.ident.to_string())
 }
 
-/// If `base` is `self.m(..)` or `<SelfType>.m(..)`, the method name `m`. The
-/// receiver must be `self` or the impl's own type, so a same-named method on an
-/// unrelated value is never matched -- the basis for safely stripping `.await`.
-fn self_call_method(base: &Expr, self_ty: Option<&syn::Ident>) -> Option<String> {
+/// The `(self-type, method)` a `<receiver>.method(..)` call targets, for `.await`
+/// classification and stripping. `self`/`Self` resolve to `self_ty` (the
+/// enclosing impl's type); any other path receiver resolves to its last segment
+/// (a resolver value like `SyncEndpoint`). `None` when the base is not a method
+/// call on a path receiver. A real future like `state.lock()` resolves to
+/// `(state, lock)` -- harmless, since that is simply not a known resolver method.
+fn resolve_call_target(base: &Expr, self_ty: Option<&str>) -> Option<(String, String)> {
     let Expr::MethodCall(call) = base else {
         return None;
     };
-    receiver_is_self_or(&call.receiver, self_ty).then(|| call.method.to_string())
-}
-
-fn receiver_is_self_or(receiver: &Expr, self_ty: Option<&syn::Ident>) -> bool {
-    let Expr::Path(path) = receiver else {
-        return false;
+    let Expr::Path(path) = &*call.receiver else {
+        return None;
     };
-    match path.path.segments.last() {
-        Some(seg) => seg.ident == "self" || self_ty.is_some_and(|ty| seg.ident == *ty),
-        None => false,
-    }
+    let seg = path.path.segments.last()?;
+    let ty = if seg.ident == "self" || seg.ident == "Self" {
+        self_ty?.to_string()
+    } else {
+        seg.ident.to_string()
+    };
+    Some((ty, call.method.to_string()))
 }
 
-/// Drop `.await` from every call to a de-asynced sibling in this body, so a now-
-/// sync call is no longer awaited (e.g. `self.sync_buffer(b).await?` becomes
-/// `self.sync_buffer(b)?`). Receiver-matched via [`self_call_method`], so only
-/// sibling calls are touched -- a real future is never stripped.
+/// Drop `.await` from every call to a de-asynced resolver method in this body, so
+/// a now-sync call is no longer awaited: `self.sync_buffer(b).await?` becomes
+/// `self.sync_buffer(b)?`, and a cross-file `SyncEndpoint.sync_state(a).await`
+/// becomes `SyncEndpoint.sync_state(a)`. Gated on the project's by-type set, so
+/// only calls to methods actually made sync are touched -- a real future is never
+/// stripped.
 fn strip_sibling_awaits(
     block: &mut syn::Block,
-    self_ty: Option<&syn::Ident>,
-    deasynced: &HashSet<String>,
+    self_ty: Option<&str>,
+    deasynced_by_type: &HashMap<String, HashSet<String>>,
 ) {
-    let mut stripper = AwaitStripper { self_ty, deasynced };
+    let mut stripper = AwaitStripper {
+        self_ty,
+        deasynced_by_type,
+    };
     stripper.visit_block_mut(block);
 }
 
 struct AwaitStripper<'a> {
-    self_ty: Option<&'a syn::Ident>,
-    deasynced: &'a HashSet<String>,
+    self_ty: Option<&'a str>,
+    deasynced_by_type: &'a HashMap<String, HashSet<String>>,
 }
 
 impl VisitMut for AwaitStripper<'_> {
     fn visit_expr_mut(&mut self, expr: &mut Expr) {
         syn::visit_mut::visit_expr_mut(self, expr);
         if let Expr::Await(await_expr) = expr
-            && let Some(name) = self_call_method(&await_expr.base, self.self_ty)
-            && self.deasynced.contains(&name)
+            && let Some((ty, method)) = resolve_call_target(&await_expr.base, self.self_ty)
+            && self
+                .deasynced_by_type
+                .get(&ty)
+                .is_some_and(|methods| methods.contains(&method))
         {
             *expr = (*await_expr.base).clone();
         }
@@ -2009,6 +2039,66 @@ impl Store for StoreImpl {
         )
         .expect("valid Rust");
         insta::assert_snapshot!(out);
+    }
+
+    #[test]
+    fn deasync_is_transitive_across_files() {
+        // lux's split: sync.rs's `sync_state` de-asyncs (it awaits only its own
+        // sync siblings); cmd.rs's `sync_state` is a thin wrapper that awaits it
+        // across files. The project-wide pass strips that cross-file `.await` and
+        // de-asyncs the wrapper too, instead of leaving `async fn` + a `.await` on
+        // a now-sync call (issue #6).
+        let sync = r#"
+#[taurpc::procedures(path = "sync")]
+pub trait SyncMethods {
+    async fn sync_buffer<R: Runtime>(app_handle: AppHandle<R>) -> Result<u8, String>;
+    async fn sync_state<R: Runtime>(app_handle: AppHandle<R>) -> Result<String, String>;
+}
+
+#[taurpc::resolvers]
+impl SyncMethods for SyncEndpoint {
+    async fn sync_buffer<R: Runtime>(self, app_handle: AppHandle<R>) -> Result<u8, String> {
+        Ok(0)
+    }
+    async fn sync_state<R: Runtime>(self, app_handle: AppHandle<R>) -> Result<String, String> {
+        SyncEndpoint.sync_buffer(app_handle.clone()).await?;
+        Ok("ok".into())
+    }
+}
+"#;
+        let cmd = r#"
+#[taurpc::procedures(path = "cmd")]
+pub trait CmdMethods {
+    async fn sync_state<R: Runtime>(app_handle: AppHandle<R>) -> Result<String, String>;
+}
+
+#[taurpc::resolvers]
+impl CmdMethods for CmdEndpoint {
+    async fn sync_state<R: Runtime>(self, app: AppHandle<R>) -> Result<String, String> {
+        SyncEndpoint.sync_state(app.clone()).await
+    }
+}
+"#;
+        let out = transform_project(&[
+            ("sync.rs".into(), sync.into()),
+            ("cmd.rs".into(), cmd.into()),
+        ])
+        .expect("valid Rust");
+        let cmd_out = &out[1].1;
+        assert!(
+            !cmd_out.contains("async fn sync_state"),
+            "cmd.rs::sync_state should be de-async'd:\n{cmd_out}"
+        );
+        assert!(
+            cmd_out.contains("SyncEndpoint.sync_state(app.clone())")
+                && !cmd_out.contains("sync_state(app.clone()).await"),
+            "the cross-file `.await` should be stripped:\n{cmd_out}"
+        );
+        assert!(
+            !cmd_out.contains("async injection"),
+            "no async-injection flag once de-async'd:\n{cmd_out}"
+        );
+        insta::assert_snapshot!(cmd_out);
     }
 
     #[test]
