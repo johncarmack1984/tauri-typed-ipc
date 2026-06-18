@@ -43,22 +43,40 @@
 //! assert_eq!(procedures.names(), &["greet"]);
 //! ```
 //!
-//! Mount every procedure on one handler:
+//! Mount every procedure on one handler. `handler` adapts the type-erased
+//! procedures into a tauri invoke handler; drop it into your `Builder`,
+//! then run as usual with `.run(tauri::generate_context!())`:
 //!
-//! ```ignore
-//! tauri::Builder::default()
-//!     .invoke_handler(tauri_typed_ipc::handler(Backend.into_procedures()))
-//!     .run(tauri::generate_context!())
-//!     .expect("error while running tauri application");
+//! ```no_run
+//! # use tauri_typed_ipc::procedures;
+//! # #[procedures]
+//! # trait Greeter {
+//! #     fn greet(&self, name: String) -> String;
+//! # }
+//! # struct Backend;
+//! # impl Greeter for Backend {
+//! #     fn greet(&self, name: String) -> String {
+//! #         format!("Hello, {name}!")
+//! #     }
+//! # }
+//! fn mount<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+//!     builder.invoke_handler(tauri_typed_ipc::handler(Backend.into_procedures()))
+//! }
 //! ```
 //!
 //! With the `export` feature, render the matching client and guard it
 //! against drift:
 //!
-//! ```ignore
+//! ```no_run
+//! # use tauri_typed_ipc::procedures;
+//! # #[procedures]
+//! # trait Greeter {
+//! #     fn greet(&self, name: String) -> String;
+//! # }
 //! tauri_typed_ipc::Bindings::new()
 //!     .register::<GreeterProcedures>()
 //!     .export_to("../src/bindings.ts")?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ```typescript
