@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.1.0...v0.1.1) - 2026-06-18
+
+### Other
+
+- make Result<_, String> a built-in drop-in ([#15](https://github.com/johncarmack1984/tauri-typed-ipc/pull/15))
+
 ## [0.1.0] - 2026-06-16
 
 Initial release. Built on specta `2.0.0-rc.25` (pinned exactly; see the README).
