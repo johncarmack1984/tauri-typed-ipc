@@ -26,7 +26,7 @@ The crate is `tauri-typed-ipc`; the examples here pull it in under the short
 alias `ttipc` (`ttipc = { package = "tauri-typed-ipc", version = "0.1" }` in
 `Cargo.toml`), though the full `tauri_typed_ipc` path works just as well.
 
-**Status:** `0.1.0`, built on specta `2.0.0-rc.25` (pinned exact -- specta v2
+**Status:** `0.1.2`, built on specta `2.0.0-rc.25` (pinned exact -- specta v2
 is still a release candidate, so the dependency is pinned and bumped per
 release). The surface below is exercised by the example app and the test
 suite. See [ROADMAP.md](ROADMAP.md) for what's next.
