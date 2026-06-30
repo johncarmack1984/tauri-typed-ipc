@@ -2,5 +2,5 @@
 # inherits this too: rustup resolves by directory walk, not by cargo
 # workspace.
 [toolchain]
-channel = "1.96.0"
+channel = "1.96.1"
 components = ["rustfmt", "clippy"]
