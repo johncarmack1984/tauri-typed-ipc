@@ -1,0 +1,29 @@
+# seo-kit per-repo config (scaffolded by `seo-kit setup`).
+# This file makes the repo a saved surface: `seo-kit audit github.com` runs the
+# full configured provider set from any directory inside the repo and writes
+# reports to reports_dir below (committed reports give you the trend history the
+# Measure phase needs). Secrets and provider enablement stay in the seo-kit tool
+# home — this file is safe to commit. Add more [[surface]] blocks as needed.
+
+[seokit]
+reports_dir = "seo-reports"
+
+[[surface]]
+id = "tauri-typed-ipc"
+url = "https://github.com/johncarmack1984/tauri-typed-ipc"
+kind = "site"
+# Each field below unlocks a provider for this target; fill what applies.
+# gsc_property = "sc-domain:github.com"  # Search Console queries; uncomment once the property is verified
+github_repo = "johncarmack1984/tauri-typed-ipc"  # GitHub repo topics / description / traffic signals
+positioning = "tauri-typed-ipc is a Rust crate (crates.io): trait-based, type-safe Tauri IPC built on specta v2, sync commands by default, with a generated drift-checked TypeScript client and a TauRPC codemod; no website of its own -- the surfaces are crates.io, docs.rs, lib.rs, and the GitHub repo."
+# seed_keywords = []  # unlocks trends (free) + dataforseo volume / serper SERP position (keyed)
+
+# GEO probe (LLM citation + namesake disambiguation). Needs surface_markers +
+# geo_probes; namesake_markers and cite_domains are optional (cite_domains
+# defaults to the surface's domain).
+# surface_markers = []  # strings that prove an answer is about THIS entity (handles, product names, domains)
+# namesake_markers = []  # strings that prove the answer drifted to a namesake
+# cite_domains = ["github.com"]
+# geo_probes = [
+#     "Who or what is ... and what do they build?",
+# ]

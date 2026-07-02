@@ -12,10 +12,10 @@ Define your Rust/TypeScript IPC surface once -- procedures and events as a singl
 Rust trait -- and both sides stay in agreement at compile time: the wire is
 identical to a raw `#[tauri::command]`, and the matching TypeScript client is
 generated and drift-checked from the same definition, so a change on one side
-that the other has not accounted for fails the build rather than the app.
+that the other hasn't accounted for fails the build rather than the app.
 
 Compared to raw `invoke`, the call sites are typed end to end and the client
-cannot silently drift from the Rust. Compared to
+can't silently drift from the Rust. Compared to
 [TauRPC](https://github.com/MatsDK/TauRPC) -- the closest existing tool --
 procedures are sync by default (async is opt-in per procedure, not mandatory),
 the wire stays identical to a raw `#[tauri::command]` so a trait can be adopted

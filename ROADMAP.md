@@ -112,8 +112,10 @@ paying the async tax.
 - **R5 Ship.** Examples and docs ("hello-tauri-typed-ipc"), port lux to tauri-typed-ipc as
   the dogfood validation, publish 0.1.0 on specta rc.25.
 
-**Status (2026-06):** R0-R5 are complete; 0.1.0 is the release at hand, built on
-specta rc.25. The lux dogfood port is paused pending DMX hardware.
+**Status (2026-07):** R0-R5 are complete; 0.1.2 is published, built on specta
+rc.25. The lux dogfood port shipped: [lux](https://github.com/johncarmack1984/lux)
+drives its whole IPC surface (commands, events, committed drift-checked
+bindings) through tauri-typed-ipc.
 
 ### Open questions
 
