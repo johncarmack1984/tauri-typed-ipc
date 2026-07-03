@@ -3,15 +3,15 @@ members = ["tauri-typed-ipc", "tauri-typed-ipc-macros", "tauri-typed-ipc-migrate
 resolver = "3"
 
 [workspace.package]
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 rust-version = "1.96"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/johncarmack1984/tauri-typed-ipc"
 
 [workspace.dependencies]
-tauri-typed-ipc = { version = "=0.1.3", path = "tauri-typed-ipc" }
-tauri-typed-ipc-macros = { version = "=0.1.3", path = "tauri-typed-ipc-macros" }
+tauri-typed-ipc = { version = "=0.1.4", path = "tauri-typed-ipc" }
+tauri-typed-ipc-macros = { version = "=0.1.4", path = "tauri-typed-ipc-macros" }
 
 # Pinned exact through the rc churn; bump deliberately per release
 # until specta 2.0.0 stable.
