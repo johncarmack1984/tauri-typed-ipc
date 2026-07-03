@@ -37,8 +37,7 @@ workload:
 - `ttipc_async_procedure` -- the async path (`async fn`), which adds the
   spawn-and-resolve round-trip.
 
-The taurpc binary has the matching `raw_command` control and a single
-taurpc arm, whose resolvers are async-only.
+The taurpc binary has the matching `raw_command` control and a single taurpc arm, whose resolvers are async-only (the arm pins taurpc `0.5.2`, which predates the opt-in sync methods TauRPC gained in [MatsDK/TauRPC#69](https://github.com/MatsDK/TauRPC/pull/69)).
 
 Read the results as each layer's **delta over the `raw_command` control
 in its own binary** -- that cancels machine and run variance across the
