@@ -16,10 +16,15 @@ ignore = [
     # Add advisory IDs here with a one-line reason when triage decides to
     # accept the risk, e.g.:
     # { id = "RUSTSEC-0000-0000", reason = "no fix available; not reachable" },
-    # glib VariantStrIter unsoundness, pulled transitively via tauri's gtk 0.18
-    # stack. No released tauri uses gtk/glib 0.20, so there is no upgrade path
-    # yet; revisit when tauri moves to gtk-rs 0.20.
-    { id = "RUSTSEC-2024-0429", reason = "glib VariantStrIter unsoundness; transitive via tauri's gtk 0.18 stack, no released tauri uses gtk/glib 0.20" },
+    # Two quick-xml DoS advisories (O(n^2) duplicate-attribute scan; unbounded
+    # namespace-declaration allocation), fixed only in quick-xml >= 0.41.
+    # Reached solely via plist <- tauri, which parses the app's own
+    # bundle/config plists, not attacker-supplied XML. The latest plist (1.9.0)
+    # still pins quick-xml ^0.39, so no lockfile update can reach the fix.
+    # Accepted 2026-07-03; remove both once a plist release moves to
+    # quick-xml >= 0.41 (cargo-deny will flag them as advisory-not-detected).
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml duplicate-attribute DoS; trusted-input plist path via tauri, no plist release on quick-xml 0.41 yet" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml unbounded namespace-declaration DoS; same trusted-input plist path, same missing upgrade path" },
 ]
 
 [licenses]
