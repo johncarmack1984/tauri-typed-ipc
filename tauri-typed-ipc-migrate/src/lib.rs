@@ -5,10 +5,10 @@
 //! per-method `<R: Runtime>` + `AppHandle<R>` boilerplate collapses to a plain
 //! `&self` receiver and a bare `AppHandle`. [`transform`] applies that rewrite
 //! to the trait definition and to the resolver impl (and drops the resolver
-//! struct's `#[taurpc::ipc_type]`). TauRPC is async-only; a method whose resolver
-//! body does no real async work is made sync (ttipc's default), transitively
-//! through sibling calls, since ttipc also rejects an async procedure that
-//! takes an injected `AppHandle` or `State<T>`.
+//! struct's `#[taurpc::ipc_type]`). TauRPC was async-only before MatsDK/TauRPC#69;
+//! a method whose resolver body does no real async work is made sync (ttipc's
+//! default), transitively through sibling calls, since ttipc also rejects an
+//! async procedure that takes an injected `AppHandle` or `State<T>`.
 //!
 //! The transform parses with `syn` and re-emits with `prettyplease`, so the
 //! output is clean Rust the migrator runs their own `rustfmt` over. `syn` drops
@@ -2234,11 +2234,11 @@ pub trait Ping {
 
     #[test]
     fn deasyncs_methods_without_await() {
-        // TauRPC is async-only. A resolver body that never `.await`s becomes a
-        // sync `fn` (in both the trait and the impl); one that awaits a real
-        // future (`fetch(..)`, not a sibling) stays `async` -- and since it keeps
-        // its `AppHandle`, it is also flagged for manual rework. The header notes
-        // both.
+        // TauRPC traits arrive async-only (the shape before MatsDK/TauRPC#69).
+        // A resolver body that never `.await`s becomes a sync `fn` (in both the
+        // trait and the impl); one that awaits a real future (`fetch(..)`, not a
+        // sibling) stays `async` -- and since it keeps its `AppHandle`, it is
+        // also flagged for manual rework. The header notes both.
         let out = transform(
             r#"
 #[taurpc::procedures(path = "calc")]

@@ -14,19 +14,13 @@ identical to a raw `#[tauri::command]`, and the matching TypeScript client is
 generated and drift-checked from the same definition, so a change on one side
 that the other hasn't accounted for fails the build rather than the app.
 
-Compared to raw `invoke`, the call sites are typed end to end and the client
-can't silently drift from the Rust. Compared to
-[TauRPC](https://github.com/MatsDK/TauRPC) -- the closest existing tool --
-procedures are sync by default (async is opt-in per procedure, not mandatory),
-the wire stays identical to a raw `#[tauri::command]` so a trait can be adopted
-one command at a time, and the TypeScript client is generated at build time with
-a drift `check` rather than at dev-server runtime.
+Compared to raw `invoke`, the call sites are typed end to end and the client can't silently drift from the Rust. Compared to [TauRPC](https://github.com/MatsDK/TauRPC) -- the closest existing tool -- procedures are sync by default (TauRPC's were async-only until [MatsDK/TauRPC#69](https://github.com/MatsDK/TauRPC/pull/69) added opt-in sync methods), the wire stays identical to a raw `#[tauri::command]` so a trait can be adopted one command at a time, and the TypeScript client is generated at build time with a drift `check` rather than at dev-server runtime.
 
 The crate is `tauri-typed-ipc`; the examples here pull it in under the short
 alias `ttipc` (`ttipc = { package = "tauri-typed-ipc", version = "0.1" }` in
 `Cargo.toml`), though the full `tauri_typed_ipc` path works just as well.
 
-**Status:** `0.1.2`, built on specta `2.0.0-rc.25` (pinned exact -- specta v2
+**Status:** `0.1.3`, built on specta `2.0.0-rc.25` (pinned exact -- specta v2
 is still a release candidate, so the dependency is pinned and bumped per
 release). The surface below is exercised by the example app and the test
 suite. See [ROADMAP.md](ROADMAP.md) for what's next.

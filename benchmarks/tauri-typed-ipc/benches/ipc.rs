@@ -2,9 +2,9 @@
 //!
 //! Three arms in one binary: raw_command (the #[tauri::command] control),
 //! ttipc_procedure (the sync-first path), and ttipc_async_procedure (the
-//! async path). taurpc's resolvers are async-only, so ttipc_async_procedure
-//! vs taurpc is the apples-to-apples pair; ttipc_procedure is the sync-first
-//! arm with no taurpc equivalent.
+//! async path). The taurpc arm's pinned release (0.5.2) is async-only, so
+//! ttipc_async_procedure vs taurpc is the apples-to-apples pair;
+//! ttipc_procedure is the sync-first arm with no taurpc equivalent.
 //!
 //! Compare against ../taurpc/benches/ipc.rs run on the same machine.
 //! The raw_command arm is the shared control: report each layer as its
@@ -43,8 +43,8 @@ fn ttipc_procedure(bencher: divan::Bencher) {
 fn ttipc_async_procedure(bencher: divan::Bencher) {
     // Same greet workload as an async fn: handler -> spawn -> resolve,
     // through the identical pipeline. The gap over ttipc_procedure is the
-    // spawn-and-resolve tax (tauri's runtime), which is the path taurpc's
-    // async-only resolvers always take -- so this is the arm to set beside
+    // spawn-and-resolve tax (tauri's runtime), which is the path the taurpc
+    // arm's resolvers always take -- so this is the arm to set beside
     // taurpc.
     let (_app, webview) = mock_webview(handler(AsyncApp.into_procedures()));
     bencher

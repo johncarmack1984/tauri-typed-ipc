@@ -1,6 +1,6 @@
 //! Fixtures for the ttipc arm: the same `greet` the taurpc twin
 //! implements, as a sync ttipc procedure and as an async one. The async
-//! twin matches taurpc's async-only resolvers for the apples-to-apples
+//! twin matches the taurpc arm's async resolvers for the apples-to-apples
 //! pair; the sync twin is the sync-first arm.
 
 use ttipc::procedures;
