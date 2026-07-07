@@ -78,8 +78,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       # MSRV from [workspace.package] rust-version (specta rc.25 needs a recent
-      # rustc; this matches rust-toolchain.toml).
-      - uses: dtolnay/rust-toolchain@a75363d06101555fc97c6c7e1e65670b99104d98 # 1.96 branch
+      # rustc; this matches rust-toolchain.toml). The toolchain is an explicit
+      # input, not the action ref, so dependabot pin bumps cannot change it.
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable branch
+        with:
+          toolchain: "1.96"
       - uses: ./.github/actions/install-tauri-deps
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - run: cargo check --workspace --locked
