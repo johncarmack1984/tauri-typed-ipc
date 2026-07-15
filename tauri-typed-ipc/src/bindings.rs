@@ -568,7 +568,7 @@ mod render {
     /// types nested inside.
     fn render_ty(exporter: &FrameworkExporter, ty: &DataType) -> Result<String, Error> {
         match ty {
-            DataType::Reference(reference) => exporter.reference(reference),
+            DataType::Reference(_) => exporter.reference(ty),
             other => exporter.inline(other),
         }
     }

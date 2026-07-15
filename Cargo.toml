@@ -15,9 +15,9 @@ tauri-typed-ipc-macros = { version = "=0.1.5", path = "tauri-typed-ipc-macros" }
 
 # Pinned exact through the rc churn; bump deliberately per release
 # until specta 2.0.0 stable.
-specta = "=2.0.0-rc.25"
-specta-typescript = "=0.0.12"
-specta-serde = "=0.0.12"
+specta = { git = "https://github.com/specta-rs/specta", branch = "main" }
+specta-typescript = { git = "https://github.com/specta-rs/specta", branch = "main" }
+specta-serde = { git = "https://github.com/specta-rs/specta", branch = "main" }
 
 proc-macro2 = "1"
 proc-macro-crate = "3"
