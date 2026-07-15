@@ -271,16 +271,20 @@ pub trait Downloads {
     async fn track_async(&self, total: u32, progress: ttipc::Channel<Progress>);
 }
 
-/// A serde-asymmetric wire type for the phase-boundary test:
-/// `skip_serializing_if` makes the serialize shape (the field may be
-/// omitted) differ from the deserialize shape, which specta's unified
-/// `Format` cannot represent in one type. Exercises ttipc's 0.1
+/// A serde-asymmetric wire type for the phase-boundary test: a one-sided
+/// rename gives the field a different *key* on each side, which specta's
+/// unified `Format` cannot represent in one type. Exercises ttipc's 0.1
 /// boundary -- such a type errors loudly at export rather than rendering
 /// a wrong shape; phase-aware rendering is post-0.1.
+///
+/// `skip_serializing_if` used to sit here, but specta represents that one
+/// soundly now (`note?: string | null` covers both phases: serialize omits
+/// the key, deserialize accepts it absent, null, or set). Only a shape with
+/// no honest union left -- like this key disagreement -- still errors.
 #[derive(serde::Serialize, serde::Deserialize, specta::Type)]
 pub struct Patch {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<String>,
+    #[serde(rename(serialize = "patchNote"))]
+    pub note: String,
 }
 
 /// A descriptor-only set using the asymmetric [`Patch`] both ways, so
