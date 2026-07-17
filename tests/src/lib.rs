@@ -273,10 +273,10 @@ pub trait Downloads {
 
 /// A serde-asymmetric wire type for the phase-boundary test:
 /// `skip_serializing_if` makes the serialize shape (the field may be
-/// omitted) differ from the deserialize shape, which specta's unified
-/// `Format` cannot represent in one type. Exercises ttipc's 0.1
-/// boundary -- such a type errors loudly at export rather than rendering
-/// a wrong shape; phase-aware rendering is post-0.1.
+/// omitted) differ from the deserialize shape. As of specta
+/// 2.0.0-rc.26 the unified `Format` renders the sound superset
+/// (`note?: string | null`); under rc.25 this errored loudly at
+/// export instead.
 #[derive(serde::Serialize, serde::Deserialize, specta::Type)]
 pub struct Patch {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -284,8 +284,8 @@ pub struct Patch {
 }
 
 /// A descriptor-only set using the asymmetric [`Patch`] both ways, so
-/// exporting its bindings hits the unified-`Format` limitation. No impl
-/// needed -- the binding test only reads the descriptor.
+/// exporting its bindings exercises the unified-`Format` rendering. No
+/// impl needed -- the binding test only reads the descriptor.
 #[procedures]
 pub trait Patches {
     fn apply(&self, patch: Patch) -> Patch;

@@ -163,19 +163,21 @@ fn channels_client() {
 }
 
 #[test]
-fn asymmetric_type_errors_loudly() {
-    // A type whose serialize and deserialize shapes differ cannot be
-    // represented by specta's unified Format. ttipc surfaces that as a
-    // loud BindingsError that points at the fix (PhasesFormat), rather
-    // than silently emitting a wrong shape. This is the 0.1 boundary;
-    // phase-aware rendering (args via the deserialize phase, output via
-    // serialize) is a post-0.1 enhancement.
-    let err = Bindings::new()
+fn asymmetric_type_renders_unified() {
+    // A `skip_serializing_if` field's serialize shape (may be omitted) and
+    // deserialize shape (Option accepts omission via serde's implicit None)
+    // meet in one sound TypeScript shape: `note?: string | null`. specta's
+    // unified Format renders it directly as of 2.0.0-rc.26; under rc.25
+    // ttipc surfaced a loud BindingsError here instead (the 0.1 boundary).
+    let client = Bindings::new()
         .register::<PatchesProcedures>()
         .export()
-        .expect_err("an asymmetric type cannot render under unified Format");
-    let message = err.to_string();
-    assert!(message.contains("PhasesFormat"), "got: {message}");
+        .expect("an asymmetric optional field renders under unified Format");
+    assert!(
+        client.contains("note?: string | null"),
+        "the field should render optional-and-nullable:\n{client}"
+    );
+    insta::assert_snapshot!(client);
 }
 
 #[test]
