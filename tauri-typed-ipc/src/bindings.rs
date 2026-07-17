@@ -188,6 +188,7 @@ mod render {
         layout: Layout,
         method_case: MethodCase,
         router: Option<Cow<'static, str>>,
+        map_datatypes: Option<Box<dyn Fn(DataType) -> DataType>>,
     }
 
     #[derive(Clone)]
@@ -214,7 +215,42 @@ mod render {
                 layout: Layout::default(),
                 method_case: MethodCase::default(),
                 router: None,
+                map_datatypes: None,
             }
+        }
+
+        /// Transform every exported datatype -- the consumer's seam for
+        /// wire-level rewrites like specta-util's `Remapper::remap_dt`
+        /// (e.g. `dangerous_bigints_as_number()`, the conscious opt-out of
+        /// the BigInt export error for wire-sound `i64` fields). Applied at
+        /// export/check time to a copy of the registered collection AND to
+        /// every procedure argument, channel payload, return type, and
+        /// event payload -- after all registrations, regardless of builder
+        /// order. One transform; calling it again replaces the previous one.
+        pub fn map_datatypes(mut self, f: impl Fn(DataType) -> DataType + 'static) -> Self {
+            self.map_datatypes = Some(Box::new(f));
+            self
+        }
+
+        /// The collection as exported: the registered types, each named
+        /// type's body (and generic defaults) through the
+        /// [`map_datatypes`](Self::map_datatypes) transform when one is set.
+        fn effective_types(&self) -> Types {
+            let types = self.types.clone();
+            let Some(f) = &self.map_datatypes else {
+                return types;
+            };
+            types.map(|mut ndt| {
+                ndt.generics.to_mut().iter_mut().for_each(|generic| {
+                    if let Some(dt) = generic.default.take() {
+                        generic.default = Some(f(dt));
+                    }
+                });
+                if let Some(dt) = ndt.ty.take() {
+                    ndt.ty = Some(f(dt));
+                }
+                ndt
+            })
         }
 
         /// Choose the file layout. The default [`Layout::FlatFile`] is one
@@ -275,7 +311,9 @@ mod render {
         /// [`Layout::Files`], which spans multiple files -- use
         /// [`export_to`](Self::export_to) for that.
         pub fn export(&self) -> Result<String, BindingsError> {
-            Ok(self.exporter().export(&self.types, specta_serde::Format)?)
+            Ok(self
+                .exporter()
+                .export(&self.effective_types(), specta_serde::Format)?)
         }
 
         /// Write the client to disk: a single file under
@@ -283,7 +321,7 @@ mod render {
         /// [`Layout::Files`].
         pub fn export_to(&self, path: impl AsRef<Path>) -> Result<(), BindingsError> {
             self.exporter()
-                .export_to(path, &self.types, specta_serde::Format)?;
+                .export_to(path, &self.effective_types(), specta_serde::Format)?;
             Ok(())
         }
 
@@ -336,10 +374,30 @@ mod render {
         }
 
         /// The specta exporter that carries tauri_typed_ipc's command wrappers
-        /// (the `framework_runtime` hook) and the chosen layout.
+        /// (the `framework_runtime` hook) and the chosen layout. The
+        /// [`map_datatypes`](Self::map_datatypes) transform runs here over the
+        /// inline procedure and event types (the collection's copy goes
+        /// through [`effective_types`](Self::effective_types)).
         fn exporter(&self) -> Exporter {
-            let sets = self.sets.clone();
-            let events = self.events.clone();
+            let mut sets = self.sets.clone();
+            let mut events = self.events.clone();
+            if let Some(f) = &self.map_datatypes {
+                for set in &mut sets {
+                    for p in &mut set.procedures {
+                        p.args = p.args.drain(..).map(|(n, dt)| (n, f(dt))).collect();
+                        p.channels = p.channels.drain(..).map(|(n, dt)| (n, f(dt))).collect();
+                        p.output = f(p.output.clone());
+                    }
+                }
+                for group in &mut events {
+                    for v in &mut group.variants {
+                        v.fields = v.fields.drain(..).map(|(n, dt)| (n, f(dt))).collect();
+                        if let Some(dt) = v.data.take() {
+                            v.data = Some(f(dt));
+                        }
+                    }
+                }
+            }
             let method_case = self.method_case;
             let router = self.router.clone();
             Exporter::from(Typescript::new())

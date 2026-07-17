@@ -18,6 +18,8 @@ tauri-typed-ipc-macros = { version = "=0.1.5", path = "tauri-typed-ipc-macros" }
 specta = "=2.0.0-rc.26"
 specta-typescript = "=0.0.13"
 specta-serde = "=0.0.13"
+# Test-only: the Remapper consumer story for Bindings::map_types.
+specta-util = "=0.0.13"
 
 proc-macro2 = "1"
 proc-macro-crate = "3"
@@ -53,3 +55,4 @@ todo = "warn"
 specta = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }
 specta-serde = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }
 specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }
+specta-util = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }

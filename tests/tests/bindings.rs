@@ -197,6 +197,27 @@ fn bigint_type_errors_loudly() {
 }
 
 #[test]
+fn map_datatypes_remaps_everything_at_export() {
+    // map_datatypes is the consumer's seam for wire-level rewrites —
+    // here specta-util's Remapper turns the Ledger set's BigInt-style
+    // integers into `number`, the conscious opt-out of the export error
+    // above for wire-sound i64 fields. The ledger's bigints sit in the
+    // procedure SIGNATURE (an inline arg + return, not a named type), so
+    // this also proves the transform reaches past the collection.
+    let remapper = specta_util::Remapper::new().dangerous_bigints_as_number();
+    let client = Bindings::new()
+        .register::<LedgerProcedures>()
+        .map_datatypes(move |dt| remapper.remap_dt(dt))
+        .export()
+        .expect("bigints export once remapped to number");
+    assert!(
+        client.contains("balance(account: number): Promise<number>"),
+        "the remapped ledger should render plain numbers:\n{client}"
+    );
+    insta::assert_snapshot!(client);
+}
+
+#[test]
 fn check_guards_against_drift() {
     // The blessed consumer drift guard: matches the committed file ->
     // Ok; differs -> Drift; missing -> Read. Deterministic codegen makes
