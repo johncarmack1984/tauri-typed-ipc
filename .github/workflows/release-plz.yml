@@ -13,7 +13,10 @@ concurrency:
 jobs:
   # Publishes any crate whose version is ahead of crates.io, then tags and
   # creates the GitHub release. Runs on every push to main; a no-op until a
-  # release PR bumps the version.
+  # release PR bumps the version. Runs on the workflow's own GITHUB_TOKEN
+  # (repo workflow permissions are read+write): the tag and GitHub release
+  # are authored by github-actions[bot], and nothing here triggers on tag or
+  # release events, so the token's events-start-no-runs rule costs nothing.
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -24,16 +27,9 @@ jobs:
       # Required for the crates.io Trusted Publishing OIDC token exchange.
       id-token: write
     steps:
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        id: app-token
-        with:
-          client-id: ${{ vars.RELEASE_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_PRIVATE_KEY }}
-
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
 
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable branch
 
@@ -44,7 +40,7 @@ jobs:
         with:
           command: release
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release-pr:
     runs-on: ubuntu-latest
@@ -56,20 +52,14 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write # approve the release PR's held CI runs
     concurrency:
       group: release-plz-pr-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        id: app-token
-        with:
-          client-id: ${{ vars.RELEASE_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_PRIVATE_KEY }}
-
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
 
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable branch
 
@@ -78,4 +68,43 @@ jobs:
         with:
           command: release-pr
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A GITHUB_TOKEN branch push leaves the release PR's CI runs held in the
+      # action_required state (GitHub holds workflow runs for events its own
+      # token caused). Approve the held run for the branch tip so the release
+      # PR carries a live green gate; held runs for superseded heads are
+      # deleted — their commit is gone from the branch and they would only
+      # linger pending in the Actions tab. Fail-soft throughout: an unapproved
+      # run just means a manual "approve workflows" click before merging.
+      - name: Approve the release PR's held CI runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch=$(gh pr list --state open --json headRefName \
+            --jq '[.[] | select(.headRefName | startswith("release-plz-"))][0].headRefName // empty')
+          if [ -z "$branch" ]; then
+            echo "no open release-plz PR; nothing to approve"
+            exit 0
+          fi
+          tip=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+          approved=""
+          for i in 1 2 3; do
+            sleep 10
+            id=$(gh run list --branch "$branch" --status action_required --limit 10 --json databaseId,headSha \
+              --jq ".[] | select(.headSha==\"$tip\") | .databaseId" | head -1)
+            if [ -n "$id" ]; then
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/$id/approve" >/dev/null \
+                && { approved=1; echo "approved held run $id (tip ${tip:0:7})"; } \
+                || echo "::warning::could not approve held run $id (approve manually before merging)"
+              break
+            fi
+          done
+          [ -n "$approved" ] || echo "no held run for the branch tip (nothing newly pushed, or it already ran)"
+          gh run list --branch "$branch" --status action_required --limit 10 --json databaseId,headSha \
+            --jq ".[] | select(.headSha!=\"$tip\") | .databaseId" \
+            | while read -r stale; do
+                gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/$stale" >/dev/null \
+                  && echo "deleted stale held run $stale" \
+                  || echo "::warning::could not delete stale held run $stale"
+              done

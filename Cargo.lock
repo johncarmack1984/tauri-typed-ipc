@@ -2788,7 +2788,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-typed-ipc"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2802,7 +2802,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-typed-ipc-macros"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "insta",
  "prettyplease",
@@ -2814,7 +2814,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-typed-ipc-migrate"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "divan",
  "insta",
@@ -2826,7 +2826,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-typed-ipc-tests"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "divan",
  "insta",
