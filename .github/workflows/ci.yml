@@ -20,6 +20,23 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # The default workflow token is read+write (the release flow needs it), so a
+  # workflow file without its own permissions block silently inherits a
+  # write-capable token. Every workflow must say what it wants.
+  workflow-permissions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Every workflow declares a permissions block
+        run: |
+          fail=0
+          for f in .github/workflows/*.yml; do
+            grep -qE '^permissions:' "$f" \
+              || { echo "::error file=$f::missing a top-level permissions block — the default token is read+write"; fail=1; }
+          done
+          exit "$fail"
+
   fmt:
     name: fmt
     runs-on: ubuntu-latest
