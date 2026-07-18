@@ -251,6 +251,50 @@ pub enum BackupError {
     Empty,
 }
 
+/// The async twin of [`Counted`]: the same managed-state read through
+/// the spawn path, proving `State<T>` resolves inside the spawned
+/// future from the owned `Arc<StateManager>` the prelude clones out (a
+/// borrow could not cross the spawn). Its owner is distinct so each
+/// state implements exactly one trait.
+#[procedures]
+pub trait CountedAsync {
+    async fn hits_async(&self, state: tauri::State<'_, Hits>) -> u32;
+}
+
+/// Owner of the [`CountedAsync`] set.
+pub struct ServiceAsync;
+
+impl CountedAsync for ServiceAsync {
+    async fn hits_async(&self, state: tauri::State<'_, Hits>) -> u32 {
+        state.0
+    }
+}
+
+/// An async procedure taking the injected `AppHandle`: cloned out of
+/// the context in the synchronous prelude and moved into the future.
+/// Declared against the mock runtime so the handler tests can offer a
+/// real (mock) handle for the type-matched extraction to find.
+#[procedures]
+pub trait StampedAsync {
+    async fn stamp(&self, app: tauri::AppHandle<tauri::test::MockRuntime>, label: String)
+    -> String;
+}
+
+/// Owner of the [`StampedAsync`] set.
+pub struct PressAsync;
+
+impl StampedAsync for PressAsync {
+    async fn stamp(
+        &self,
+        app: tauri::AppHandle<tauri::test::MockRuntime>,
+        label: String,
+    ) -> String {
+        // Read through the handle so the test proves a live handle
+        // arrived, not just that a value of the right type existed.
+        format!("{}:{label}", tauri::Manager::webview_windows(&app).len())
+    }
+}
+
 /// A streamed value for the channel dispatch tests: the payload a
 /// `Channel<Progress>` carries back to the caller.
 #[derive(serde::Serialize, specta::Type)]

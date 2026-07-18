@@ -15,6 +15,7 @@
 //! [`DispatchError::MissingInjection`]: crate::DispatchError::MissingInjection
 
 use std::any::Any;
+use std::sync::Arc;
 
 use tauri::ipc::{Channel as TauriChannel, JavaScriptChannelId};
 use tauri::{State, StateManager};
@@ -34,7 +35,11 @@ type ChannelFactory<'a> = dyn Fn(JavaScriptChannelId) -> TauriChannel + Send + S
 #[doc(hidden)]
 pub struct Context<'a> {
     values: &'a [&'a (dyn Any + Send + Sync)],
-    state: Option<&'a StateManager>,
+    /// Owned (`Arc`) rather than borrowed on purpose: async procedures
+    /// resolve `State<T>` inside a spawned `'static` future, which must
+    /// own its route to the manager -- a borrow could not cross the
+    /// spawn. Sync resolution borrows from the `Arc` in place.
+    state: Option<Arc<StateManager>>,
     channels: Option<&'a ChannelFactory<'a>>,
 }
 
@@ -59,8 +64,9 @@ impl<'a> Context<'a> {
 
     /// Adds the app's managed state to what this context can resolve,
     /// so `State<T>` parameters reach it. The handler supplies this
-    /// from the invoke message.
-    pub fn with_state(mut self, state: &'a StateManager) -> Self {
+    /// from the invoke message; owned, so async dispatch can carry it
+    /// into a spawned future (see the field docs).
+    pub fn with_state(mut self, state: Arc<StateManager>) -> Self {
         self.state = Some(state);
         self
     }
@@ -83,8 +89,16 @@ impl<'a> Context<'a> {
 
     /// The managed value of type `T`, if one is managed and this
     /// context carries the state to look in.
-    pub fn state<T: Send + Sync + 'static>(&self) -> Option<State<'a, T>> {
-        self.state.and_then(|state| state.try_get::<T>())
+    pub fn state<T: Send + Sync + 'static>(&self) -> Option<State<'_, T>> {
+        self.state.as_deref().and_then(|state| state.try_get::<T>())
+    }
+
+    /// The state manager itself, cloned out, if this context carries
+    /// one. Async dispatch resolves its `State<T>` parameters from this
+    /// inside the spawned future, where a borrow from the context could
+    /// not reach.
+    pub fn state_manager(&self) -> Option<Arc<StateManager>> {
+        self.state.clone()
     }
 
     /// The typed channel for the given id, if this context carries a

@@ -188,7 +188,8 @@ where
 
         // What this call may have injected, matched by concrete type
         // (so the AppHandle is the runtime's own, mock included).
-        // `state_ref` is the runtime-free StateManager, so carrying it
+        // `state()` is the runtime-free StateManager, owned (`Arc`) so
+        // async dispatch can carry it into a spawned future; carrying it
         // inward keeps the dispatch path off the `R` parameter.
         let webview = message.webview();
         let injectable: [&(dyn Any + Send + Sync); 1] = [webview.app_handle()];
@@ -203,7 +204,7 @@ where
             move |id: JavaScriptChannelId| id.channel_on::<R, InvokeResponseBody>(webview.clone())
         };
         let ctx = Context::new(&injectable)
-            .with_state(message.state_ref())
+            .with_state(message.state())
             .with_channels(&make_channel);
 
         match procedures.dispatch(&ctx, message.command(), args) {

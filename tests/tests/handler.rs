@@ -10,9 +10,10 @@ use tauri::ipc::{Channel as TauriChannel, InvokeBody, InvokeResponseBody, JavaSc
 use tauri::test::get_ipc_response;
 use ttipc::{Context, Dispatch, handler, handler_with_fallback, procedures};
 use ttipc_tests::{
-    App, BackupDispatch, CountedDispatch, CounterDispatch, Downloader, DownloadsDispatch,
-    GreeterDispatch, Hits, PostStore, PostsDispatch, Service, TagStore, TagsDispatch, Tally, Vault,
-    invoke_request, mock_webview, mock_webview_managed,
+    App, BackupDispatch, CountedAsyncDispatch, CountedDispatch, CounterDispatch, Downloader,
+    DownloadsDispatch, GreeterDispatch, Hits, PostStore, PostsDispatch, PressAsync, Service,
+    ServiceAsync, StampedAsyncDispatch, TagStore, TagsDispatch, Tally, Vault, invoke_request,
+    mock_webview, mock_webview_managed,
 };
 
 #[tauri::command]
@@ -240,6 +241,48 @@ fn unmanaged_state_rejects() {
     .expect_err("missing managed state should reject");
     let message = err.as_str().expect("error is a string");
     assert!(message.starts_with("state not managed:"), "got: {message}");
+}
+
+#[test]
+fn async_injected_state_over_ipc() {
+    // The async twin of `injected_state_over_ipc`: `State<T>` resolves
+    // inside the spawned future, from the owned Arc<StateManager> the
+    // synchronous prelude cloned out of the context.
+    let (_app, webview) = mock_webview_managed(Hits(7), handler(ServiceAsync.into_procedures()));
+    let response = get_ipc_response(
+        &webview,
+        invoke_request("hits_async", InvokeBody::Json(json!({}))),
+    )
+    .expect("hits_async resolves from managed state");
+    assert_eq!(response.deserialize::<u32>().expect("a u32"), 7);
+}
+
+#[test]
+fn async_unmanaged_state_rejects() {
+    // Nothing managed: the in-future lookup fails loudly with the same
+    // error the sync path reports, instead of wedging the spawn path.
+    let (_app, webview) = mock_webview(handler(ServiceAsync.into_procedures()));
+    let err = get_ipc_response(
+        &webview,
+        invoke_request("hits_async", InvokeBody::Json(json!({}))),
+    )
+    .expect_err("missing managed state should reject");
+    let message = err.as_str().expect("error is a string");
+    assert!(message.starts_with("state not managed:"), "got: {message}");
+}
+
+#[test]
+fn async_injected_app_handle_over_ipc() {
+    // The handle is cloned out of the context in the synchronous
+    // prelude and moved into the future -- the mock runtime's own
+    // handle, matched by concrete type, live enough to read through.
+    let (_app, webview) = mock_webview(handler(PressAsync.into_procedures()));
+    let response = get_ipc_response(
+        &webview,
+        invoke_request("stamp", InvokeBody::Json(json!({ "label": "x" }))),
+    )
+    .expect("stamp resolves with the injected handle");
+    assert_eq!(response.deserialize::<String>().expect("a string"), "1:x");
 }
 
 #[test]
