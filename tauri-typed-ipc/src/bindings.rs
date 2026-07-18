@@ -188,7 +188,7 @@ mod render {
         layout: Layout,
         method_case: MethodCase,
         router: Option<Cow<'static, str>>,
-        map_datatypes: Option<Box<dyn Fn(DataType) -> DataType>>,
+        map_datatypes: Option<Box<dyn Fn(DataType) -> DataType + Send + Sync>>,
     }
 
     #[derive(Clone)]
@@ -227,7 +227,10 @@ mod render {
         /// every procedure argument, channel payload, return type, and
         /// event payload -- after all registrations, regardless of builder
         /// order. One transform; calling it again replaces the previous one.
-        pub fn map_datatypes(mut self, f: impl Fn(DataType) -> DataType + 'static) -> Self {
+        pub fn map_datatypes(
+            mut self,
+            f: impl Fn(DataType) -> DataType + Send + Sync + 'static,
+        ) -> Self {
             self.map_datatypes = Some(Box::new(f));
             self
         }
