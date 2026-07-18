@@ -2498,7 +2498,7 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.26"
-source = "git+https://github.com/specta-rs/specta?rev=ff7100c70f8a60a6336913fd5894c7527b9bc0ea#ff7100c70f8a60a6336913fd5894c7527b9bc0ea"
+source = "git+https://github.com/specta-rs/specta?rev=ef21f0544e153b944ff5d1b3afd20472afcf760c#ef21f0544e153b944ff5d1b3afd20472afcf760c"
 dependencies = [
  "rustc_version",
  "specta-macros",
@@ -2507,7 +2507,7 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.26"
-source = "git+https://github.com/specta-rs/specta?rev=ff7100c70f8a60a6336913fd5894c7527b9bc0ea#ff7100c70f8a60a6336913fd5894c7527b9bc0ea"
+source = "git+https://github.com/specta-rs/specta?rev=ef21f0544e153b944ff5d1b3afd20472afcf760c#ef21f0544e153b944ff5d1b3afd20472afcf760c"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -2518,7 +2518,7 @@ dependencies = [
 [[package]]
 name = "specta-serde"
 version = "0.0.13"
-source = "git+https://github.com/specta-rs/specta?rev=ff7100c70f8a60a6336913fd5894c7527b9bc0ea#ff7100c70f8a60a6336913fd5894c7527b9bc0ea"
+source = "git+https://github.com/specta-rs/specta?rev=ef21f0544e153b944ff5d1b3afd20472afcf760c#ef21f0544e153b944ff5d1b3afd20472afcf760c"
 dependencies = [
  "specta",
  "specta-macros",
@@ -2527,7 +2527,7 @@ dependencies = [
 [[package]]
 name = "specta-typescript"
 version = "0.0.13"
-source = "git+https://github.com/specta-rs/specta?rev=ff7100c70f8a60a6336913fd5894c7527b9bc0ea#ff7100c70f8a60a6336913fd5894c7527b9bc0ea"
+source = "git+https://github.com/specta-rs/specta?rev=ef21f0544e153b944ff5d1b3afd20472afcf760c#ef21f0544e153b944ff5d1b3afd20472afcf760c"
 dependencies = [
  "specta",
 ]
@@ -2535,7 +2535,7 @@ dependencies = [
 [[package]]
 name = "specta-util"
 version = "0.0.13"
-source = "git+https://github.com/specta-rs/specta?rev=ff7100c70f8a60a6336913fd5894c7527b9bc0ea#ff7100c70f8a60a6336913fd5894c7527b9bc0ea"
+source = "git+https://github.com/specta-rs/specta?rev=ef21f0544e153b944ff5d1b3afd20472afcf760c#ef21f0544e153b944ff5d1b3afd20472afcf760c"
 dependencies = [
  "specta",
 ]

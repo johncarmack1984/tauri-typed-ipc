@@ -52,7 +52,7 @@ todo = "warn"
 # rc.25 / 0.0.12); resolve them from the pinned upstream rev until the release lands,
 # then drop this section.
 [patch.crates-io]
-specta = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }
-specta-serde = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }
-specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }
-specta-util = { git = "https://github.com/specta-rs/specta", rev = "ff7100c70f8a60a6336913fd5894c7527b9bc0ea" }
+specta = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
+specta-serde = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
+specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
+specta-util = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
