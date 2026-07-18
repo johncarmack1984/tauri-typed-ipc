@@ -37,3 +37,25 @@ impl GreeterAsync for AsyncApp {
         format!("Hello, {name}!")
     }
 }
+
+/// Managed state for the async-state arm: the greeting prefix the
+/// procedure reads through `tauri::State` inside the spawned future.
+pub struct Prefix(pub &'static str);
+
+/// The async twin that also takes managed state: the same workload plus
+/// a `State<T>` parameter, so the arm measures the injection path's
+/// spawn-side cost (the prelude clones the `Arc<StateManager>`, the
+/// future resolves the state inside the spawn).
+#[procedures]
+pub trait GreeterAsyncState {
+    async fn greet(&self, prefix: tauri::State<'_, Prefix>, name: String) -> String;
+}
+
+/// Owner of the async-state set (one owner per `Dispatch` trait).
+pub struct AsyncStateApp;
+
+impl GreeterAsyncState for AsyncStateApp {
+    async fn greet(&self, prefix: tauri::State<'_, Prefix>, name: String) -> String {
+        format!("{}, {name}!", prefix.0)
+    }
+}

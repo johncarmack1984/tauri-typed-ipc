@@ -459,20 +459,13 @@ fn parse_procedure(method: &syn::TraitItemFn) -> Result<Procedure> {
     }
 
     // An async body runs off the main thread as a `'static` future, so
-    // its inputs must be owned. Wire arguments are (deserialized owned);
-    // injected `AppHandle`/`State<T>` borrow the call's `Context`, so
-    // they cannot cross into the future yet -- reject loudly rather than
-    // emit code that fails to compile deep in the future. State access
-    // from async is the next slice (a main-thread hop). A `Channel<T>`
-    // is owned (built in the synchronous prelude, then moved in), so it
-    // is allowed in an async procedure.
+    // its inputs must be owned. Wire arguments are (deserialized owned),
+    // an injected `AppHandle` is cloned out of the `Context` in the
+    // synchronous prelude and moved in, a `Channel<T>` is likewise built
+    // in the prelude and owned, and `State<T>` is resolved inside the
+    // future from the owned `Arc<StateManager>` the prelude clones out
+    // (a borrow from the context could not cross the spawn).
     let is_async = sig.asyncness.is_some();
-    if is_async && !(injected_idents.is_empty() && state_idents.is_empty()) {
-        return Err(Error::new_spanned(
-            sig,
-            "async procedures cannot take injected (AppHandle) or managed State parameters yet",
-        ));
-    }
 
     let output = match &sig.output {
         ReturnType::Default => parse_quote!(()),
@@ -567,10 +560,29 @@ fn dispatch_arm(trait_ident: &syn::Ident, proc: &Procedure, wire: &str) -> Token
 
     if *is_async {
         // Deserialize wire args up front so bad input fails without a
-        // spawn, then build any `Channel<T>` (owned, so it crosses into
-        // the future) and return a `Send` future owning the receiver and
-        // arguments. Async sets take no injected/state parameters yet
-        // (rejected at parse), so the only `_ctx` use here is channels.
+        // spawn, then resolve everything the future must own in the
+        // synchronous prelude: any `Channel<T>` (built here, owned), any
+        // injected `AppHandle` (cloned out of the context), and -- when
+        // the procedure takes `State<T>` -- the `Arc<StateManager>`
+        // itself, because `State` borrows and is therefore resolved
+        // inside the future from that owned manager.
+        let state_prelude = if state_idents.is_empty() {
+            quote!()
+        } else {
+            let first_state = &state_types[0];
+            quote! {
+                let __ttipc_state_manager = match _ctx.state_manager() {
+                    ::core::option::Option::Some(manager) => manager,
+                    ::core::option::Option::None => {
+                        return #rb::Dispatch::Sync(::core::result::Result::Err(
+                            #rb::DispatchError::MissingState(
+                                ::core::any::type_name::<#first_state>(),
+                            ),
+                        ));
+                    }
+                };
+            }
+        };
         quote! {
             #wire => {
                 #args_struct
@@ -591,7 +603,27 @@ fn dispatch_arm(trait_ident: &syn::Ident, proc: &Procedure, wire: &str) -> Token
                                 }
                             };
                         )*
+                        #(
+                            let #injected_idents = match _ctx.extract::<#injected_types>() {
+                                ::core::option::Option::Some(value) => value,
+                                ::core::option::Option::None => {
+                                    return #rb::Dispatch::Sync(::core::result::Result::Err(
+                                        #rb::DispatchError::MissingInjection(
+                                            ::core::any::type_name::<#injected_types>(),
+                                        ),
+                                    ));
+                                }
+                            };
+                        )*
+                        #state_prelude
                         #rb::Dispatch::Async(::std::boxed::Box::pin(async move {
+                            #(
+                                let #state_idents = __ttipc_state_manager
+                                    .try_get::<#state_types>()
+                                    .ok_or(#rb::DispatchError::MissingState(
+                                        ::core::any::type_name::<#state_types>(),
+                                    ))?;
+                            )*
                             #outcome
                         }))
                     }
@@ -781,16 +813,34 @@ mod tests {
     }
 
     #[test]
+    fn async_injection_expansion() {
+        // An async procedure taking both an AppHandle and State: the
+        // handle is cloned out of the context in the synchronous prelude
+        // and moved into the future; State is resolved inside the future
+        // from the owned Arc<StateManager> the prelude clones out (a
+        // borrow could not cross the spawn) -- snapshotted so both
+        // resolutions stay visible and under test.
+        let output = super::expand(
+            quote!(),
+            quote! {
+                trait Vault {
+                    async fn store(
+                        &self,
+                        app: tauri::AppHandle,
+                        hits: tauri::State<'_, Hits>,
+                        label: String,
+                    ) -> u32;
+                }
+            },
+        )
+        .expect("expansion failed");
+        let file: syn::File = syn::parse2(output).expect("expansion is not valid Rust");
+        insta::assert_snapshot!(prettyplease::unparse(&file));
+    }
+
+    #[test]
     fn rejects() {
         let cases = [
-            (
-                quote! { trait T { async fn a(&self, app: tauri::AppHandle); } },
-                "async procedures cannot take injected (AppHandle) or managed State parameters yet",
-            ),
-            (
-                quote! { trait T { async fn a(&self, s: tauri::State<'_, X>); } },
-                "async procedures cannot take injected (AppHandle) or managed State parameters yet",
-            ),
             (
                 quote! { trait T { fn a(self); } },
                 "procedures take &self (shared access to the procedure set's state)",
