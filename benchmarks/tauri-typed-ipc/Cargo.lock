@@ -3246,7 +3246,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-typed-ipc"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -3269,7 +3269,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-typed-ipc-macros"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",

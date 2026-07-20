@@ -1,10 +1,11 @@
 # The tauri-typed-ipc arm of the cross-framework comparison. Twin of
 # ../taurpc: same fixtures shape, same control arm, different IPC
-# layer. Detached crate with its own lockfile because the two layers
-# pin conflicting exact specta versions (tauri-typed-ipc =2.0.0-rc.25, taurpc
-# =2.0.0-rc.22) and can never resolve in one dependency graph; the
-# raw_command control arm in each twin calibrates across the split
-# binaries.
+# layer. Detached crate with its own lockfile. This was once forced --
+# taurpc 0.5.2 pinned specta =2.0.0-rc.22 against this crate's
+# =2.0.0-rc.25 -- but taurpc 0.8.2 pins =2.0.0-rc.25 too, so one graph
+# could now hold both. The split is kept because each twin's numbers are
+# published as a delta over its own raw_command control; merging the
+# binaries would redefine that baseline.
 [package]
 name = "tauri-typed-ipc-bench"
 version = "0.0.0"
