@@ -1,8 +1,9 @@
 //! Fixtures for the taurpc arm: the same `greet` the tauri-typed-ipc twin
 //! implements, in taurpc's native shape (async resolvers on a Clone impl).
-//! The pinned 0.5.2 release is async-only -- the design difference under
-//! measurement. Upstream merged opt-in sync methods in MatsDK/TauRPC#69;
-//! once that ships in a release, this arm can grow a sync twin.
+//! The pinned 0.8.2 release is async-only -- the design difference under
+//! measurement. Upstream merged opt-in sync methods in MatsDK/TauRPC#69
+//! hours after 0.8.2 was cut, so no release carries them yet; once one
+//! does, this arm can grow a sync twin.
 
 /// The procedure under test, identical across twins.
 #[taurpc::procedures]

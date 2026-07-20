@@ -1,7 +1,6 @@
 # Shared mock-IPC plumbing for the benchmark twins. A separate crate so
-# both arms run byte-identical harness code even though they can never
-# share one dependency graph (conflicting exact specta pins; see the
-# twin manifests).
+# both arms run byte-identical harness code across their separate
+# dependency graphs (see the twin manifests for why they stay split).
 [package]
 name = "bench-common"
 version = "0.0.0"

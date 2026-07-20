@@ -12,10 +12,7 @@ Three detached crates, each with its own lockfile:
 - `tauri-typed-ipc/` -- raw control arm + tauri-typed-ipc arm.
 - `taurpc/` -- raw control arm + taurpc arm.
 
-The split is forced: taurpc 0.5.2 pins `specta = "=2.0.0-rc.22"` and
-tauri-typed-ipc pins `=2.0.0-rc.25`, which can never resolve in one dependency
-graph. Both twins pin identical tauri feature sets so the differences
-between them are the IPC layers, not tauri configuration.
+The split is no longer forced. It was: taurpc 0.5.2 pinned `specta = "=2.0.0-rc.22"` against tauri-typed-ipc's `=2.0.0-rc.25`, and those could never resolve in one graph. taurpc 0.8.2 pins `=2.0.0-rc.25` -- the same version -- so one graph now holds both. The twins stay split because the `raw_command` control arm and the published deltas are defined per binary; folding them into one binary is a deliberate methodology change, not a cleanup. Both twins pin identical tauri feature sets so the differences between them are the IPC layers, not tauri configuration.
 
 ## Runtime cost
 
@@ -37,7 +34,7 @@ workload:
 - `ttipc_async_procedure` -- the async path (`async fn`), which adds the
   spawn-and-resolve round-trip.
 
-The taurpc binary has the matching `raw_command` control and a single taurpc arm, whose resolvers are async-only (the arm pins taurpc `0.5.2`, which predates the opt-in sync methods TauRPC gained in [MatsDK/TauRPC#69](https://github.com/MatsDK/TauRPC/pull/69)).
+The taurpc binary has the matching `raw_command` control and a single taurpc arm, whose resolvers are async-only (the arm pins taurpc `0.8.2`, the current release; the opt-in sync methods TauRPC gained in [MatsDK/TauRPC#69](https://github.com/MatsDK/TauRPC/pull/69) merged after `0.8.2` was cut and are not in any release yet).
 
 Read the results as each layer's **delta over the `raw_command` control
 in its own binary** -- that cancels machine and run variance across the
