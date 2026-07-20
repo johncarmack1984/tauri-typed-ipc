@@ -1,7 +1,7 @@
 # The taurpc arm of the cross-framework comparison. Twin of
-# ../tauri-typed-ipc; see that manifest for why the twins are split crates
-# (conflicting exact specta pins). Pinned to the taurpc release lux
-# runs in production.
+# ../tauri-typed-ipc; see that manifest for why the twins are still split
+# crates. Pinned to the current taurpc release, so the comparison is
+# against a live baseline rather than a stale one.
 #
 # custom-protocol turns tauri::is_dev() off, which stops taurpc's
 # into_handler from running its dev-mode TS export (a filesystem side
@@ -23,8 +23,8 @@ bench-common = { path = "../common" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Must match taurpc's exact pin; the graph cannot hold any other 2.x.
-specta = "=2.0.0-rc.22"
-taurpc = "=0.5.2"
+specta = "=2.0.0-rc.25"
+taurpc = "=0.8.2"
 tauri = { version = "2", features = ["test", "custom-protocol"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 
