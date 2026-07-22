@@ -188,6 +188,10 @@ mod render {
         layout: Layout,
         method_case: MethodCase,
         router: Option<Cow<'static, str>>,
+        /// Emit the JSON Schema contract + a pre-invoke check into the client
+        /// (the `validate` feature). Off by default.
+        #[cfg(feature = "validate")]
+        validate: bool,
     }
 
     #[derive(Clone)]
@@ -214,6 +218,8 @@ mod render {
                 layout: Layout::default(),
                 method_case: MethodCase::default(),
                 router: None,
+                #[cfg(feature = "validate")]
+                validate: false,
             }
         }
 
@@ -246,6 +252,21 @@ mod render {
             self
         }
 
+        /// Emit the JSON Schema contract and a pre-invoke check into the
+        /// generated client (the `validate` feature). Off by default.
+        ///
+        /// Each method then validates its arguments before `invoke`, against
+        /// the same per-command JSON Schema the Rust
+        /// [`Validator`](crate::Validator) compiles -- so a malformed call
+        /// fails at the client boundary with a clear error, and both ends check
+        /// one contract. The check is a small self-contained function emitted
+        /// into the file; the client pulls in no runtime dependency.
+        #[cfg(feature = "validate")]
+        pub fn validate(mut self, validate: bool) -> Self {
+            self.validate = validate;
+            self
+        }
+
         /// Add a procedure set's bindings, named by its generated
         /// `{Trait}Procedures` handle.
         pub fn register<P: ProcedureSet>(mut self) -> Self {
@@ -275,14 +296,18 @@ mod render {
         /// [`Layout::Files`], which spans multiple files -- use
         /// [`export_to`](Self::export_to) for that.
         pub fn export(&self) -> Result<String, BindingsError> {
-            Ok(self.exporter().export(&self.types, specta_serde::Format)?)
+            let block = self.validate_block()?;
+            Ok(self
+                .exporter(block)
+                .export(&self.types, specta_serde::Format)?)
         }
 
         /// Write the client to disk: a single file under
         /// [`Layout::FlatFile`], or a directory of per-module files under
         /// [`Layout::Files`].
         pub fn export_to(&self, path: impl AsRef<Path>) -> Result<(), BindingsError> {
-            self.exporter()
+            let block = self.validate_block()?;
+            self.exporter(block)
                 .export_to(path, &self.types, specta_serde::Format)?;
             Ok(())
         }
@@ -337,7 +362,7 @@ mod render {
 
         /// The specta exporter that carries tauri_typed_ipc's command wrappers
         /// (the `framework_runtime` hook) and the chosen layout.
-        fn exporter(&self) -> Exporter {
+        fn exporter(&self, validate_block: Option<String>) -> Exporter {
             let sets = self.sets.clone();
             let events = self.events.clone();
             let method_case = self.method_case;
@@ -346,8 +371,36 @@ mod render {
                 .framework_prelude(HEADER)
                 .layout(self.layout)
                 .framework_runtime(move |exporter| {
-                    render_runtime(&sets, &events, method_case, router.as_deref(), &exporter)
+                    render_runtime(
+                        &sets,
+                        &events,
+                        method_case,
+                        router.as_deref(),
+                        validate_block.as_deref(),
+                        &exporter,
+                    )
                 })
+        }
+
+        /// The pre-invoke check block -- the validator function plus the
+        /// per-command JSON Schemas -- or `None` when validation is off. Built
+        /// from the same descriptor the client is rendered from, so what the
+        /// client checks against cannot drift from the types it declares.
+        fn validate_block(&self) -> Result<Option<String>, BindingsError> {
+            #[cfg(feature = "validate")]
+            if self.validate {
+                let sets: Vec<crate::validate::SchemaSet<'_>> = self
+                    .sets
+                    .iter()
+                    .map(|set| crate::validate::SchemaSet {
+                        namespace: set.namespace,
+                        procedures: &set.procedures,
+                    })
+                    .collect();
+                let schemas = crate::validate::build_command_schemas(self.types.clone(), &sets)?;
+                return Ok(Some(render_validate_block(&schemas)));
+            }
+            Ok(None)
         }
     }
 
@@ -366,8 +419,10 @@ mod render {
         events: &[EventGroup],
         method_case: MethodCase,
         router: Option<&str>,
+        validate_block: Option<&str>,
         exporter: &FrameworkExporter,
     ) -> Result<Cow<'static, str>, Error> {
+        let validate = validate_block.is_some();
         let mut out = String::new();
         if !sets.is_empty() {
             let any_channels = sets
@@ -383,9 +438,15 @@ mod render {
         if !events.is_empty() {
             out.push_str(IMPORT_LISTEN);
         }
+        // The validator and the per-command schemas, once, ahead of the set
+        // objects whose methods call into them.
+        if let Some(block) = validate_block {
+            out.push('\n');
+            out.push_str(block);
+        }
         for set in sets {
             out.push('\n');
-            out.push_str(&render_object(set, method_case, exporter)?);
+            out.push_str(&render_object(set, method_case, validate, exporter)?);
         }
         for error in collect_errors(sets) {
             out.push('\n');
@@ -413,6 +474,7 @@ mod render {
     fn render_object(
         set: &Set,
         method_case: MethodCase,
+        validate: bool,
         exporter: &FrameworkExporter,
     ) -> Result<String, Error> {
         let mut methods = Vec::with_capacity(set.procedures.len());
@@ -449,10 +511,25 @@ mod render {
                 Some(ns) => format!("{ns}.{}", proc.name),
                 None => proc.name.to_string(),
             };
+            // The argument object, shared by the invoke call and the
+            // pre-invoke check so both see the same wire keys.
+            let args_obj = if count == 0 {
+                "{}".to_string()
+            } else {
+                format!("{{ {} }}", fields.join(", "))
+            };
             let call = if count == 0 {
                 format!("invoke(\"{wire}\")")
             } else {
-                format!("invoke(\"{wire}\", {{ {} }})", fields.join(", "))
+                format!("invoke(\"{wire}\", {args_obj})")
+            };
+            // With validation on, check the arguments against the command's
+            // schema before the call, so a bad payload fails at the boundary
+            // rather than after a round-trip.
+            let guard = if validate {
+                format!("    __ttipcValidate(\"{wire}\", {args_obj});\n")
+            } else {
+                String::new()
             };
             let method = match method_case {
                 MethodCase::Camel => to_camel(proc.name),
@@ -466,7 +543,7 @@ mod render {
                 None => String::new(),
             };
             methods.push(format!(
-                "{throws}  {method}({params}): Promise<{ret}> {{\n    return {call};\n  }}",
+                "{throws}  {method}({params}): Promise<{ret}> {{\n{guard}    return {call};\n  }}",
                 params = params.join(", "),
             ));
         }
@@ -476,6 +553,100 @@ mod render {
             methods.join(",\n\n"),
         ))
     }
+
+    /// The pre-invoke check block: the per-command JSON Schemas the client was
+    /// generated from, plus a small self-contained validator over the subset of
+    /// JSON Schema those documents use. No runtime dependency -- the client
+    /// stays dep-light. Each command's schema is self-contained (it carries the
+    /// definitions it references), so the validator needs no shared registry.
+    #[cfg(feature = "validate")]
+    fn render_validate_block(schemas: &[(String, serde_json::Value)]) -> String {
+        let mut entries = String::new();
+        for (wire, schema) in schemas {
+            // Infallible: a wire name is a string and the schema is a Value we
+            // just built, both of which always serialize to JSON.
+            let key = serde_json::to_string(wire).expect("a wire name serializes");
+            let value = serde_json::to_string(schema).expect("a schema serializes");
+            entries.push_str("  ");
+            entries.push_str(&key);
+            entries.push_str(": ");
+            entries.push_str(&value);
+            entries.push_str(",\n");
+        }
+        format!("const __ttipcSchemas: Record<string, any> = {{\n{entries}}};\n\n{VALIDATOR_TS}")
+    }
+
+    /// The self-contained argument validator emitted alongside the schemas. A
+    /// pared-down JSON Schema checker: it follows `$ref` into the embedded
+    /// definitions and enforces `type`, `properties`/`required`, `items`, and
+    /// `enum`; unions and nullable shapes are accepted as-is, so it never
+    /// rejects a valid payload, only flags a clearly wrong one.
+    #[cfg(feature = "validate")]
+    const VALIDATOR_TS: &str = r#"function __ttipcDefs(root: any): Record<string, any> {
+  return (root.$defs ?? root.definitions ?? {}) as Record<string, any>;
+}
+
+function __ttipcCheck(value: unknown, schema: any, root: any, path: string): string | null {
+  if (schema === true || schema === undefined || schema === null) return null;
+  if (typeof schema.$ref === "string") {
+    const name = schema.$ref.split("/").pop() as string;
+    return __ttipcCheck(value, __ttipcDefs(root)[name], root, path);
+  }
+  if (schema.oneOf || schema.anyOf || schema.allOf || Array.isArray(schema.type)) {
+    return null;
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.some((v: unknown) => v === value)) {
+    return `${path} is not an allowed value`;
+  }
+  const type: unknown = schema.type;
+  if (type === "object" || schema.properties || schema.required) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return `${path} must be an object`;
+    }
+    const obj = value as Record<string, unknown>;
+    for (const key of (schema.required ?? []) as string[]) {
+      if (!(key in obj)) return `${path}.${key} is required`;
+    }
+    const props = schema.properties ?? {};
+    for (const key of Object.keys(props)) {
+      if (key in obj) {
+        const err = __ttipcCheck(obj[key], props[key], root, `${path}.${key}`);
+        if (err !== null) return err;
+      }
+    }
+    return null;
+  }
+  if (type === "array") {
+    if (!Array.isArray(value)) return `${path} must be an array`;
+    if (schema.items) {
+      for (let i = 0; i < value.length; i++) {
+        const err = __ttipcCheck(value[i], schema.items, root, `${path}[${i}]`);
+        if (err !== null) return err;
+      }
+    }
+    return null;
+  }
+  if (type === "string" && typeof value !== "string") return `${path} must be a string`;
+  if ((type === "integer" || type === "number") && typeof value !== "number") {
+    return `${path} must be a number`;
+  }
+  if (type === "integer" && typeof value === "number" && !Number.isInteger(value)) {
+    return `${path} must be an integer`;
+  }
+  if (type === "boolean" && typeof value !== "boolean") return `${path} must be a boolean`;
+  if (type === "null" && value !== null) return `${path} must be null`;
+  return null;
+}
+
+function __ttipcValidate(command: string, args: unknown): void {
+  const schema = __ttipcSchemas[command];
+  if (schema === undefined) return;
+  const error = __ttipcCheck(args, schema, schema, "arguments");
+  if (error !== null) {
+    throw new Error(`invalid arguments for ${command}: ${error}`);
+  }
+}
+"#;
 
     /// A factory grouping every registered set into one nested object --
     /// the taurpc `createTauRPCProxy` drop-in. A frontend that did
@@ -682,6 +853,11 @@ mod render {
         /// specta-typescript could not render a type.
         #[error("rendering TypeScript failed: {0}")]
         Render(#[from] Error),
+        /// Building the JSON Schema contract for the pre-invoke check failed
+        /// (the `validate` feature).
+        #[cfg(feature = "validate")]
+        #[error(transparent)]
+        Validate(#[from] crate::validate::ValidatorError),
         /// An I/O failure during [`check`](Bindings::check) -- a missing or
         /// unreadable committed client, or the temporary render it compares
         /// against under [`Layout::Files`].

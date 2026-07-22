@@ -38,7 +38,7 @@ use serde_json::{Value, json};
 use specta::Types;
 use specta::datatype::{DataType, Field, NamedDataType, NamedReferenceType, Reference, Struct};
 
-use crate::ProcedureSet;
+use crate::{ProcedureSet, ProcedureType};
 
 /// Compiled per-command argument validators, built from one or more procedure
 /// sets. Reuses the binding descriptor a `#[procedures]` trait already
@@ -70,65 +70,24 @@ impl Validator {
     /// so it surfaces at startup, when the validator is assembled, not
     /// per call.
     pub fn register<P: ProcedureSet>(mut self) -> Result<Self, ValidatorError> {
-        // Populate the type registry and collect each command's wire shape --
-        // the same call the bindings generator makes.
+        // Collect the set's wire shapes -- the same call the bindings
+        // generator makes -- then compile one validator per command from the
+        // shared contract builder (the single source the TypeScript client
+        // embeds too).
         let mut types = Types::default();
         let procedures = P::procedures(&mut types);
-
-        // Synthesize one named args struct per command into the shared
-        // registry, so a single export renders every command's object schema
-        // plus the named types they reference (resolved through `$ref`).
-        let mut wire_names = Vec::with_capacity(procedures.len());
-        for (index, procedure) in procedures.iter().enumerate() {
-            // A unique, collision-proof definition name; the wire name is the
-            // map key. Only the arguments are modelled -- a `Channel<T>`'s id
-            // and forward-compatible extras ride through as permitted
-            // additional properties.
-            let def_name = format!("TtipcArgs{index}");
-            let fields: Vec<(String, DataType)> = procedure
-                .args
-                .iter()
-                .map(|(name, ty)| ((*name).to_string(), inline_leaf(ty.clone())))
-                .collect();
-            NamedDataType::new(def_name.clone(), &mut types, |_types, ndt| {
-                let mut builder = Struct::named();
-                for (name, ty) in &fields {
-                    builder = builder.field(name.clone(), Field::new(ty.clone()));
-                }
-                ndt.ty = Some(builder.build());
-            });
-
-            let wire = match P::NAMESPACE {
-                Some(namespace) => format!("{namespace}.{}", procedure.name),
-                None => procedure.name.to_string(),
-            };
-            wire_names.push((wire, def_name));
-        }
-
-        // One export of the whole registry, then one compiled validator per
-        // command rooted at its args definition (the shared `definitions`
-        // supply every `$ref`).
-        let document = specta_jsonschema::JsonSchema::default()
-            .export(&types, specta_serde::Format)
-            .map_err(|source| ValidatorError::Schema(source.to_string()))?;
-        let document: Value = serde_json::from_str(&document)
-            .map_err(|source| ValidatorError::Schema(source.to_string()))?;
-        let definitions = document
-            .get("definitions")
-            .cloned()
-            .unwrap_or_else(|| json!({}));
-
-        for (wire, def_name) in wire_names {
-            let schema = json!({
-                "$schema": "http://json-schema.org/draft-07/schema#",
-                "$ref": format!("#/definitions/{def_name}"),
-                "definitions": definitions,
-            });
+        let schemas = build_command_schemas(
+            types,
+            &[SchemaSet {
+                namespace: P::NAMESPACE,
+                procedures: &procedures,
+            }],
+        )?;
+        for (wire, schema) in schemas {
             let compiled = jsonschema::validator_for(&schema)
                 .map_err(|source| ValidatorError::Compile(source.to_string()))?;
             self.commands.insert(wire, compiled);
         }
-
         Ok(self)
     }
 
@@ -159,6 +118,90 @@ impl Default for Validator {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// One procedure set's contribution to the schema contract: its wire namespace
+/// (namespaced commands become `ns.method`) and the procedure signatures the
+/// bindings generator collected.
+pub(crate) struct SchemaSet<'a> {
+    /// `#[procedures(namespace = ...)]`, or `None` for bare wire names.
+    pub namespace: Option<&'a str>,
+    /// The set's procedure descriptors, in declaration order.
+    pub procedures: &'a [ProcedureType],
+}
+
+/// Build the per-command JSON Schema contract for one or more sets: one schema
+/// per command, rooted at a synthesized args definition and carrying the shared
+/// registry `definitions` so every `$ref` resolves. This is the single source
+/// both ends use -- the Rust handler compiles these into validators, and the
+/// TypeScript client embeds the identical documents.
+///
+/// Only the arguments are modelled. A `Channel<T>`'s wire id and any
+/// forward-compatible extras ride through as permitted additional properties.
+pub(crate) fn build_command_schemas(
+    mut types: Types,
+    sets: &[SchemaSet<'_>],
+) -> Result<Vec<(String, Value)>, ValidatorError> {
+    // Synthesize one named args struct per command into the shared registry, so
+    // a single export renders every command's object schema plus the named
+    // types they reference. A global index keeps definition names unique across
+    // sets; the wire name (namespaced when the set is) is the lookup key.
+    let mut wire_names = Vec::new();
+    for set in sets {
+        for procedure in set.procedures {
+            let def_name = format!("TtipcArgs{}", wire_names.len());
+            let fields: Vec<(String, DataType)> = procedure
+                .args
+                .iter()
+                .map(|(name, ty)| ((*name).to_string(), inline_leaf(ty.clone())))
+                .collect();
+            NamedDataType::new(def_name.clone(), &mut types, |_types, ndt| {
+                let mut builder = Struct::named();
+                for (name, ty) in &fields {
+                    builder = builder.field(name.clone(), Field::new(ty.clone()));
+                }
+                ndt.ty = Some(builder.build());
+            });
+            let wire = match set.namespace {
+                Some(namespace) => format!("{namespace}.{}", procedure.name),
+                None => procedure.name.to_string(),
+            };
+            wire_names.push((wire, def_name));
+        }
+    }
+
+    let document = specta_jsonschema::JsonSchema::default()
+        .export(&types, specta_serde::Format)
+        .map_err(|source| ValidatorError::Schema(source.to_string()))?;
+    let document: Value = serde_json::from_str(&document)
+        .map_err(|source| ValidatorError::Schema(source.to_string()))?;
+    // The exporter keys its named types under "definitions" (draft-07) or
+    // "$defs" (2019-09+), and stamps the matching `$schema`, depending on the
+    // draft it emits -- which varies across specta-jsonschema versions. Read
+    // whichever the document used so the per-command `$ref` resolves against
+    // the same dialect the definitions were rendered for.
+    let defs_key = if document.get("$defs").is_some() {
+        "$defs"
+    } else {
+        "definitions"
+    };
+    let definitions = document.get(defs_key).cloned().unwrap_or_else(|| json!({}));
+    let dialect = document.get("$schema").cloned();
+
+    let mut schemas = Vec::with_capacity(wire_names.len());
+    for (wire, def_name) in wire_names {
+        let mut schema = serde_json::Map::new();
+        if let Some(dialect) = dialect.clone() {
+            schema.insert("$schema".to_string(), dialect);
+        }
+        schema.insert(
+            "$ref".to_string(),
+            Value::String(format!("#/{defs_key}/{def_name}")),
+        );
+        schema.insert(defs_key.to_string(), definitions.clone());
+        schemas.push((wire, Value::Object(schema)));
+    }
+    Ok(schemas)
 }
 
 /// Unwrap inline named references to the datatype they render as, recursively,
