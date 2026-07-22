@@ -226,6 +226,51 @@ where
     }
 }
 
+/// Like [`handler`], but validates each call's arguments against a
+/// [`Validator`](crate::Validator) before routing (the `validate` feature).
+/// A covered command whose payload fails its schema is rejected at the
+/// boundary -- before the procedure runs -- with [`DispatchError::Invalid`];
+/// everything else routes exactly as [`handler`] does.
+#[cfg(feature = "validate")]
+pub fn handler_validated<R: tauri::Runtime>(
+    procedures: Procedures,
+    validator: crate::Validator,
+) -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static {
+    handler_validated_with_fallback(procedures, validator, |_| false)
+}
+
+/// Like [`handler_with_fallback`], but validates covered commands first (the
+/// `validate` feature). See [`handler_validated`].
+#[cfg(feature = "validate")]
+pub fn handler_validated_with_fallback<R, F>(
+    procedures: Procedures,
+    validator: crate::Validator,
+    fallback: F,
+) -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static
+where
+    R: tauri::Runtime,
+    F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
+{
+    let inner = handler_with_fallback(procedures, fallback);
+    move |invoke| {
+        // Validate a covered command's JSON arguments up front. An uncovered
+        // command validates as `Ok` (routing decides it), and a raw body
+        // passes through so the inner handler rejects it as `RawBody` -- one
+        // owner of that error.
+        let failure = match invoke.message.payload() {
+            InvokeBody::Json(value) => validator.validate(invoke.message.command(), value).err(),
+            InvokeBody::Raw(_) => None,
+        };
+        if let Some(error) = failure {
+            invoke
+                .resolver
+                .reject(DispatchError::from(error).to_string());
+            return true;
+        }
+        inner(invoke)
+    }
+}
+
 /// Resolves or rejects an invoke from a dispatched call's outcome. A
 /// procedure's typed `Err` rejects with the serialized error; a
 /// wire-level [`DispatchError`] rejects with its string form.

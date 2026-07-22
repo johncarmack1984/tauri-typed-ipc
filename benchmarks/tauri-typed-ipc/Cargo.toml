@@ -17,7 +17,8 @@ publish = false
 
 [dependencies]
 bench-common = { path = "../common" }
-ttipc = { package = "tauri-typed-ipc", path = "../../tauri-typed-ipc" }
+# `validate` on to measure the opt-in boundary-validation arm's overhead.
+ttipc = { package = "tauri-typed-ipc", path = "../../tauri-typed-ipc", features = ["validate"] }
 serde_json = "1"
 # Feature set matches the taurpc twin exactly (defaults on, even
 # though tauri-typed-ipc itself needs neither wry nor custom-protocol) so the

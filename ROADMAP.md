@@ -145,11 +145,14 @@ bindings) through tauri-typed-ipc.
 
 ### Beyond 0.1
 
-- **Runtime-validated bindings (Zod).** TypeScript types vanish at runtime, so a
-  malformed or version-skewed IPC payload is only caught where it gets misused,
-  not at the boundary. Generating Zod schemas alongside the types via specta-zod
-  would let the client validate payloads as they cross the wire -- catching
-  Rust/TS drift and bad data at the edge rather than deep in the UI. A second
-  exporter is a 0.1 non-goal, so this stays opt-in and purely additive to the
-  TypeScript output; specta-zod already covers tauri-typed-ipc's wire types today but is
-  pre-1.0, so shipping it is gated on specta-zod maturing.
+- **Runtime-validated bindings (opt-in, JSON Schema).** TypeScript types vanish
+  at runtime, so a malformed or version-skewed IPC payload is only caught where
+  it gets misused, not at the boundary. An opt-in `validate` feature (default
+  off) emits a JSON Schema contract from the specta graph so both ends check the
+  payload against one document: the client validates arguments before `invoke`,
+  and the Rust handler validates the incoming payload before dispatch. JSON
+  Schema is chosen over a TypeScript-only schema (Zod) precisely because the
+  contract must hold on both ends -- a language-neutral document is the only one
+  the Rust side can validate against too, and `specta-jsonschema` lowers the same
+  graph the bindings already use. Purely additive and default-off: the normal
+  build pulls no validator and pays nothing.
