@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.1.6...v0.1.7) - 2026-07-22
+
+### Other
+
+- opt-in runtime payload validation at the IPC boundary ([#47](https://github.com/johncarmack1984/tauri-typed-ipc/pull/47))
+- weekly + PR job building against the latest tauri 2.x ([#46](https://github.com/johncarmack1984/tauri-typed-ipc/pull/46))
+
 ## [0.1.6](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.1.5...v0.1.6) - 2026-07-18
 
 ### Other
