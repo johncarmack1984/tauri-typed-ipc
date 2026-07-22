@@ -18,6 +18,11 @@ tauri-typed-ipc-macros = { version = "=0.1.6", path = "tauri-typed-ipc-macros" }
 specta = "=2.0.0-rc.25"
 specta-typescript = "=0.0.12"
 specta-serde = "=0.0.12"
+# Opt-in `validate` feature only. specta-jsonschema pins the same rc.25 exact.
+specta-jsonschema = "=0.0.3"
+# default-features off: drops reqwest + TLS for remote $ref resolution, which
+# the self-contained contract does not need.
+jsonschema = { version = "0.29", default-features = false }
 
 proc-macro2 = "1"
 proc-macro-crate = "3"

@@ -12,10 +12,10 @@
 //! tauri-version variance between the split graphs.
 
 use bench_common::{invoke_request, mock_webview};
-use ttipc::handler;
+use ttipc::{Validator, handler, handler_validated};
 use tauri_typed_ipc_bench::{
     App, AsyncApp, AsyncStateApp, GreeterAsyncDispatch, GreeterAsyncStateDispatch, GreeterDispatch,
-    Prefix,
+    GreeterProcedures, Prefix,
 };
 use serde_json::json;
 use tauri::ipc::InvokeBody;
@@ -37,6 +37,21 @@ fn raw_command(bencher: divan::Bencher) {
 #[divan::bench]
 fn ttipc_procedure(bencher: divan::Bencher) {
     let (_app, webview) = mock_webview(handler(App.into_procedures()));
+    bencher
+        .with_inputs(|| invoke_request("greet", InvokeBody::Json(json!({ "name": "world" }))))
+        .bench_values(|request| get_ipc_response(&webview, request));
+}
+
+#[divan::bench]
+fn ttipc_procedure_validated(bencher: divan::Bencher) {
+    // The sync arm with the opt-in `validate` feature: each call's payload is
+    // checked against the command's JSON Schema before dispatch. The gap over
+    // ttipc_procedure is the per-call validation cost -- the honest price of
+    // boundary validation, default-off so an app pays it only when it asks.
+    let validator = Validator::new()
+        .register::<GreeterProcedures>()
+        .expect("the validator builds from the descriptor");
+    let (_app, webview) = mock_webview(handler_validated(App.into_procedures(), validator));
     bencher
         .with_inputs(|| invoke_request("greet", InvokeBody::Json(json!({ "name": "world" }))))
         .bench_values(|request| get_ipc_response(&webview, request));
