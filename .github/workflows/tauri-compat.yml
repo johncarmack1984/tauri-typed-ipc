@@ -1,0 +1,66 @@
+name: Tauri compat
+
+# Prove ttipc still builds and passes against the LATEST Tauri 2.x stable,
+# resolved at run time rather than from the committed lock. The library
+# stands on tauri's `Invoke` seam (an unstable, macro-facing API), so a 2.x
+# release that reshapes it would surface here first. Weekly, plus every PR;
+# the badge is honest -- a red badge means ttipc has drifted from current
+# tauri, and that failure is the signal, not something to paper over.
+on:
+  schedule:
+    # Mondays, 06:00 UTC.
+    - cron: "0 6 * * 1"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: compat-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only: this job resolves and tests a dependency, it never writes the repo.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # ttipc declares rust-version = 1.96, and cargo's MSRV-aware resolver would
+  # otherwise cap "latest tauri 2.x" to what 1.96 supports -- so a tauri that
+  # raised its own MSRV would be silently skipped while this job still claimed
+  # "latest". The job runs on current stable Rust, so let the resolver pick the
+  # genuine latest 2.x regardless of MSRV.
+  CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: allow
+
+jobs:
+  compat:
+    name: latest tauri 2.x
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable branch
+      - uses: ./.github/actions/install-tauri-deps
+      - name: Resolve the latest Tauri 2.x
+        # `tauri = "2"` in the manifest already means "any 2.x"; the
+        # committed lock just froze one point release. Advancing only tauri
+        # (not the whole graph) keeps the signal about tauri, not unrelated
+        # dep churn. What it resolves to is written to the run summary so the
+        # tested version is visible without digging through logs.
+        run: |
+          cargo update -p tauri 2>&1 | tee "$RUNNER_TEMP/tauri-update.txt"
+          resolved=$(cargo tree --package tauri --depth 0 --prefix none 2>/dev/null | head -n1)
+          {
+            echo "### Tauri compatibility check"
+            echo ""
+            echo "Built and tested against \`${resolved}\`."
+            echo ""
+            echo '```'
+            cat "$RUNNER_TEMP/tauri-update.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Build and test against the resolved Tauri
+        # No --locked on purpose: the step above deliberately advanced the
+        # lock. A failure here means the current tauri 2.x broke ttipc -- the
+        # signal this workflow exists to surface.
+        run: cargo test --workspace --all-features
