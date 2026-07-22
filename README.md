@@ -2,6 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/tauri-typed-ipc.svg)](https://crates.io/crates/tauri-typed-ipc)
 [![docs.rs](https://img.shields.io/docsrs/tauri-typed-ipc)](https://docs.rs/tauri-typed-ipc)
+[![tauri compat](https://github.com/johncarmack1984/tauri-typed-ipc/actions/workflows/tauri-compat.yml/badge.svg)](https://github.com/johncarmack1984/tauri-typed-ipc/actions/workflows/tauri-compat.yml)
 [![license](https://img.shields.io/crates/l/tauri-typed-ipc.svg)](#license)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 

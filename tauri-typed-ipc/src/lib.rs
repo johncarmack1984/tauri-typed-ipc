@@ -106,10 +106,16 @@ mod bindings;
 mod channel;
 mod context;
 mod handler;
+#[cfg(feature = "validate")]
+mod validate;
 
 #[cfg(feature = "export")]
 pub use bindings::{Bindings, BindingsError, Layout, MethodCase};
 pub use bindings::{ErrorSet, EventSet, ProcedureSet};
+#[cfg(feature = "validate")]
+pub use handler::{handler_validated, handler_validated_with_fallback};
+#[cfg(feature = "validate")]
+pub use validate::{ValidationError, Validator, ValidatorError};
 // Descriptor payloads carried from the derives to the bindings generator. Named
 // in generated code (`ProcedureSet::procedures` etc.), never built by hand.
 #[doc(hidden)]
@@ -158,6 +164,12 @@ pub enum DispatchError {
     /// [`with_channels`]: Context::with_channels
     #[error("no channel factory: {0}")]
     MissingChannel(&'static str),
+    /// The payload failed runtime validation against the command's schema.
+    /// Only produced by [`handler_validated`], under the `validate` feature;
+    /// rejected at the boundary, before the procedure runs.
+    #[cfg(feature = "validate")]
+    #[error(transparent)]
+    Invalid(#[from] crate::validate::ValidationError),
 }
 
 // Referenced by macro-generated code. Not public API.

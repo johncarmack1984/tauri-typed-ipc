@@ -8,6 +8,11 @@ license.workspace = true
 [lib]
 name = "ttipc_tests"
 
+# Gated so the msrv job (which checks without --all-features) never compiles the
+# validator's dependency tree; --all-features (test/clippy/docs) turns it on.
+[features]
+validate = ["ttipc/validate"]
+
 [dependencies]
 ttipc = { package = "tauri-typed-ipc", path = "../tauri-typed-ipc", features = ["export"] }
 serde.workspace = true

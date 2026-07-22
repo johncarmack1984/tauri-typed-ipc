@@ -3,15 +3,15 @@ members = ["tauri-typed-ipc", "tauri-typed-ipc-macros", "tauri-typed-ipc-migrate
 resolver = "3"
 
 [workspace.package]
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 rust-version = "1.96"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/johncarmack1984/tauri-typed-ipc"
 
 [workspace.dependencies]
-tauri-typed-ipc = { version = "=0.1.6", path = "tauri-typed-ipc" }
-tauri-typed-ipc-macros = { version = "=0.1.6", path = "tauri-typed-ipc-macros" }
+tauri-typed-ipc = { version = "=0.1.7", path = "tauri-typed-ipc" }
+tauri-typed-ipc-macros = { version = "=0.1.7", path = "tauri-typed-ipc-macros" }
 
 # Pinned exact through the rc churn; bump deliberately per release
 # until specta 2.0.0 stable.
@@ -20,6 +20,13 @@ specta-typescript = "=0.0.13"
 specta-serde = "=0.0.13"
 # Test-only: the Remapper consumer story for Bindings::map_types.
 specta-util = "=0.0.13"
+# Opt-in `validate` feature only. rc.26 lane: 0.0.4 is the specta-jsonschema that
+# tracks specta rc.26 (0.0.3 pins rc.25); resolved from the same upstream rev
+# below. On main this is `=0.0.3` (rc.25) until the rc.26 release lands.
+specta-jsonschema = "=0.0.4"
+# default-features off: drops reqwest + TLS for remote $ref resolution, which
+# the self-contained contract does not need.
+jsonschema = { version = "0.29", default-features = false }
 
 proc-macro2 = "1"
 proc-macro-crate = "3"
@@ -56,3 +63,4 @@ specta = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944
 specta-serde = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
 specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
 specta-util = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
+specta-jsonschema = { git = "https://github.com/specta-rs/specta", rev = "ef21f0544e153b944ff5d1b3afd20472afcf760c" }
