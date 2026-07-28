@@ -37,10 +37,18 @@ jobs:
     name: latest tauri 2.x
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable branch
       - uses: ./.github/actions/install-tauri-deps
+      - uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-targets: "false"
       - name: Resolve the latest Tauri 2.x
         # `tauri = "2"` in the manifest already means "any 2.x"; the
         # committed lock just froze one point release. Advancing only tauri
@@ -64,3 +72,6 @@ jobs:
         # lock. A failure here means the current tauri 2.x broke ttipc -- the
         # signal this workflow exists to surface.
         run: cargo test --workspace --all-features
+      - name: sccache stats
+        if: ${{ always() }}
+        run: sccache --show-stats
