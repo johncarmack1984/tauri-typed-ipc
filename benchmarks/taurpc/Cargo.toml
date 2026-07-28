@@ -31,6 +31,9 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 [dev-dependencies]
 divan = "0.1"
 
+[package.metadata.cargo-machete]
+ignored = ["serde", "specta"]  # macro-expansion deps: taurpc's proc macros emit bare serde/specta paths
+
 [[bench]]
 name = "ipc"
 harness = false
