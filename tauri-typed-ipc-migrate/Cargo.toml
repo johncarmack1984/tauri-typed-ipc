@@ -32,5 +32,8 @@ tempfile.workspace = true
 name = "transform"
 harness = false
 
+[package.metadata.cargo-machete]
+ignored = ["proc-macro2"]  # feature-activation dep (span-locations); not imported directly
+
 [lints]
 workspace = true
