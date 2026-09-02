@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.1.9...v0.1.10) - 2026-09-02
+
+### Other
+
+- set workspace homepage to johncarmack.com ([#58](https://github.com/johncarmack1984/tauri-typed-ipc/pull/58))
+
 ## [0.1.8](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.1.7...v0.1.8) - 2026-07-22
 
 ### Other
