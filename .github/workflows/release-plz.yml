@@ -73,6 +73,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable branch
 
+      # release-pr runs cargo-semver-checks, which builds the crate's rustdoc,
+      # and tauri's Linux tree (glib, gobject, webkit2gtk) needs the system
+      # libraries for that, as it does in the release job above.
+      - uses: ./.github/actions/install-tauri-deps
+
       - name: Run release-plz
         uses: release-plz/action@f67a7e724bdad4a0f6875f186060a0ca2770d76c # v0.5.147
         with:
