@@ -8,7 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- [**breaking**] build on specta 2.0.0-rc.27, with Bindings::map_datatypes ([#70](https://github.com/johncarmack1984/tauri-typed-ipc/pull/70))
+- `Bindings::map_datatypes`: one transform over every exported datatype (the collection's named types, each procedure's arguments, channels and return type, and each event payload). It's the hook for wire-level rewrites like specta-util's `Remapper::dangerous_bigints_as_number()`. ([#70](https://github.com/johncarmack1984/tauri-typed-ipc/pull/70))
+
+### Changed
+
+- Built on specta `2.0.0-rc.27` (specta-typescript and specta-serde 0.0.14, specta-jsonschema 0.0.5), still pinned exact. A consumer needs specta rc.27 too, which is what makes this release breaking. ([#70](https://github.com/johncarmack1984/tauri-typed-ipc/pull/70))
+- A field whose serialize and deserialize shapes differ, like an `Option` with `skip_serializing_if`, renders as optional and nullable (`note?: string | null`) instead of failing the export. ([#70](https://github.com/johncarmack1984/tauri-typed-ipc/pull/70))
+- With `validate`, the JSON Schema in the generated client is draft 2020-12 (`$defs`, integer bounds instead of `format`), so a validating client regenerates with different schema text. ([#70](https://github.com/johncarmack1984/tauri-typed-ipc/pull/70))
 
 ## [0.1.10](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.1.9...v0.1.10) - 2026-09-02
 
