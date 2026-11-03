@@ -6,7 +6,7 @@ tauri-typed-ipc on top of it.
 ## Context
 
 - specta lives at [specta-rs/specta](https://github.com/specta-rs/specta),
-  currently `2.0.0-rc.25`. Working fork: `johncarmack1984/specta`.
+  currently `2.0.0-rc.27`. Working fork: `johncarmack1984/specta`.
 - The [Specta v2 RFCs](https://specta.dev/docs/specta/rfc)
   document six phases of v2 rework (Feb 2025 - Apr 2026), now mostly landed:
   the reference-system redesign (`ArcId`, named vs opaque references),

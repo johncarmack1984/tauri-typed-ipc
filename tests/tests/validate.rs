@@ -8,7 +8,9 @@ use serde_json::json;
 use tauri::ipc::InvokeBody;
 use tauri::test::get_ipc_response;
 use ttipc::{Bindings, Validator, handler, handler_validated, procedures};
-use ttipc_tests::{invoke_request, mock_webview};
+use ttipc_tests::{
+    Downloader, DownloadsDispatch, DownloadsProcedures, invoke_request, mock_webview,
+};
 
 // A self-contained set, so the test does not lean on fixture internals: one
 // bare-primitive argument, the case that would slip past an empty schema
@@ -121,6 +123,26 @@ fn validated_handler_rejects_a_bad_container_element() {
 }
 
 #[test]
+fn validated_channel_command_lets_the_channel_id_through() {
+    // The contract models only the arguments, but a `Channel<T>`'s wire id
+    // rides the same payload (`progress: "__CHANNEL__:0"`). A validating
+    // handler resolves the streaming call exactly as the plain handler does
+    // in handler.rs's channel_command_over_ipc.
+    let validator = Validator::new()
+        .register::<DownloadsProcedures>()
+        .expect("the validator builds");
+    let (_app, webview) = mock_webview(handler_validated(Downloader.into_procedures(), validator));
+    get_ipc_response(
+        &webview,
+        invoke_request(
+            "track",
+            InvokeBody::Json(json!({ "total": 2, "progress": "__CHANNEL__:0" })),
+        ),
+    )
+    .expect("the channel id passes validation and the command resolves");
+}
+
+#[test]
 fn validated_client_emits_the_contract_and_a_guard() {
     let client = Bindings::new()
         .register::<GreeterProcedures>()
@@ -139,14 +161,21 @@ fn validated_client_emits_the_contract_and_a_guard() {
         "expected the schemas:\n{client}"
     );
     // The inline-leaf fix reaches the client too: greet's string arg carries a
-    // real schema, and add's Vec<u32> validates its integer elements.
+    // real schema, and add's Vec<u32> emits an array-of-integer schema. Match
+    // the shape, not exact bytes -- the numeric bounds/keys a specta-jsonschema
+    // version stamps on an integer vary (`format` vs `maximum`), and `type`
+    // sorts last, so `"type":"X"}` is a version-stable anchor.
     assert!(
         client.contains(r#""name":{"type":"string"}"#),
-        "expected greet's arg schema:\n{client}"
+        "expected greet's string arg schema:\n{client}"
     );
     assert!(
-        client.contains(r#""items":{"format":"uint32","minimum":0,"type":"integer"}"#),
-        "expected add's element schema:\n{client}"
+        client.contains(r#""type":"array"}"#),
+        "expected add's values to be an array:\n{client}"
+    );
+    assert!(
+        client.contains(r#""type":"integer"}"#),
+        "expected add's element to be an integer:\n{client}"
     );
     // Each method checks its arguments before the (unchanged) invoke.
     assert!(
