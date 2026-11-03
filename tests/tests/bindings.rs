@@ -163,19 +163,21 @@ fn channels_client() {
 }
 
 #[test]
-fn asymmetric_type_errors_loudly() {
-    // A type whose serialize and deserialize shapes differ cannot be
-    // represented by specta's unified Format. ttipc surfaces that as a
-    // loud BindingsError that points at the fix (PhasesFormat), rather
-    // than silently emitting a wrong shape. This is the 0.1 boundary;
-    // phase-aware rendering (args via the deserialize phase, output via
-    // serialize) is a post-0.1 enhancement.
-    let err = Bindings::new()
+fn asymmetric_type_renders_unified() {
+    // A `skip_serializing_if` field's serialize shape (may be omitted) and
+    // deserialize shape (Option accepts omission via serde's implicit None)
+    // meet in one sound TypeScript shape: `note?: string | null`. specta's
+    // unified Format renders it directly as of 2.0.0-rc.26; under rc.25
+    // ttipc surfaced a loud BindingsError here instead (the 0.1 boundary).
+    let client = Bindings::new()
         .register::<PatchesProcedures>()
         .export()
-        .expect_err("an asymmetric type cannot render under unified Format");
-    let message = err.to_string();
-    assert!(message.contains("PhasesFormat"), "got: {message}");
+        .expect("an asymmetric optional field renders under unified Format");
+    assert!(
+        client.contains("note?: string | null"),
+        "the field should render optional-and-nullable:\n{client}"
+    );
+    insta::assert_snapshot!(client);
 }
 
 #[test]
@@ -192,6 +194,27 @@ fn bigint_type_errors_loudly() {
         .expect_err("a BigInt-style integer cannot render losslessly");
     let message = err.to_string();
     assert!(message.contains("BigInt"), "got: {message}");
+}
+
+#[test]
+fn map_datatypes_remaps_everything_at_export() {
+    // map_datatypes is the consumer's seam for wire-level rewrites —
+    // here specta-util's Remapper turns the Ledger set's BigInt-style
+    // integers into `number`, the conscious opt-out of the export error
+    // above for wire-sound i64 fields. The ledger's bigints sit in the
+    // procedure SIGNATURE (an inline arg + return, not a named type), so
+    // this also proves the transform reaches past the collection.
+    let remapper = specta_util::Remapper::new().dangerous_bigints_as_number();
+    let client = Bindings::new()
+        .register::<LedgerProcedures>()
+        .map_datatypes(move |dt| remapper.remap_dt(dt))
+        .export()
+        .expect("bigints export once remapped to number");
+    assert!(
+        client.contains("balance(account: number): Promise<number>"),
+        "the remapped ledger should render plain numbers:\n{client}"
+    );
+    insta::assert_snapshot!(client);
 }
 
 #[test]
