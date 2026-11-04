@@ -188,11 +188,18 @@ where
 
         // What this call may have injected, matched by concrete type
         // (so the AppHandle is the runtime's own, mock included).
-        // `state()` is the runtime-free StateManager, owned (`Arc`) so
-        // async dispatch can carry it into a spawned future; carrying it
-        // inward keeps the dispatch path off the `R` parameter.
         let webview = message.webview();
         let injectable: [&(dyn Any + Send + Sync); 1] = [webview.app_handle()];
+        // `State<T>` parameters resolve from the runtime-free
+        // StateManager, owned (`Arc`) so async dispatch can carry it into
+        // a spawned future; carrying it inward keeps the dispatch path off
+        // the `R` parameter. Tauri 2.12 deprecated this accessor in favor
+        // of `Manager::state`, which is `R`-typed and fetches one `T` at a
+        // time, and nothing else in tauri 2 hands out the manager. Tauri
+        // marks the accessor to go private or away in v3, so a tauri 3
+        // port needs another route to state.
+        #[allow(deprecated)]
+        let state = message.state();
         // Build `Channel<T>` parameters from the webview -- the one
         // `R`-typed step. `channel_on` returns an `R`-free channel (the
         // runtime is captured inside its `Arc`'d closure), so dispatch
@@ -204,7 +211,7 @@ where
             move |id: JavaScriptChannelId| id.channel_on::<R, InvokeResponseBody>(webview.clone())
         };
         let ctx = Context::new(&injectable)
-            .with_state(message.state())
+            .with_state(state)
             .with_channels(&make_channel);
 
         match procedures.dispatch(&ctx, message.command(), args) {
