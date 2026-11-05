@@ -142,6 +142,51 @@ fn validated_channel_command_lets_the_channel_id_through() {
     .expect("the channel id passes validation and the command resolves");
 }
 
+// An argument type that denies unknown fields. The contract leaves objects
+// open because serde ignores extra keys, but serde rejects one here, so the
+// schema keeps this object closed.
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(deny_unknown_fields)]
+struct Level {
+    value: u8,
+}
+
+#[procedures]
+trait Mixer {
+    fn set(&self, level: Level) -> u8;
+}
+
+struct Desk;
+
+impl Mixer for Desk {
+    fn set(&self, level: Level) -> u8 {
+        level.value
+    }
+}
+
+#[test]
+fn validated_handler_rejects_a_field_serde_denies() {
+    // The extra key fails at the boundary with the validation error, rather
+    // than reaching serde, which would reject it too.
+    let validator = Validator::new()
+        .register::<MixerProcedures>()
+        .expect("the validator builds");
+    let (_app, webview) = mock_webview(handler_validated(Desk.into_procedures(), validator));
+    let err = get_ipc_response(
+        &webview,
+        invoke_request(
+            "set",
+            InvokeBody::Json(json!({ "level": { "value": 1, "extra": true } })),
+        ),
+    )
+    .expect_err("an unknown field is rejected");
+    let message = err.as_str().expect("error is a string");
+    assert!(
+        message.starts_with("invalid payload for"),
+        "expected a validation rejection, got: {message}"
+    );
+}
+
 #[test]
 fn validated_client_emits_the_contract_and_a_guard() {
     let client = Bindings::new()

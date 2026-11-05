@@ -173,7 +173,8 @@ pub(crate) fn build_command_schemas(
     // The contract checks what the handler will deserialize, and serde ignores
     // unknown fields, so objects stay open: a channel's wire id rides beside the
     // modelled arguments, and specta-jsonschema would otherwise close every
-    // struct with `additionalProperties: false`.
+    // struct with `additionalProperties: false`. A type with
+    // `deny_unknown_fields` stays closed, since serde rejects the extra key too.
     let document = specta_jsonschema::JsonSchema::default()
         .allow_additional_properties(true)
         .export(&types, specta_serde::Format)
