@@ -6,9 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [0.3.0](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.2.1...v0.3.0) - 2026-11-05
 
-### Other
+### Changed
 
-- *(deps)* [**breaking**] build on specta 2.0.0-rc.28 ([#75](https://github.com/johncarmack1984/tauri-typed-ipc/pull/75))
+- Built on specta `2.0.0-rc.28` (specta-typescript and specta-serde 0.0.15, specta-jsonschema 0.0.6), still pinned exact. A consumer needs specta rc.28 too, which is what makes this release breaking. ([#75](https://github.com/johncarmack1984/tauri-typed-ipc/pull/75))
+- With `validate`, an argument type with `#[serde(deny_unknown_fields)]` rejects an extra key at the boundary with the validation error. Before, the key got through validation and serde rejected it. ([#75](https://github.com/johncarmack1984/tauri-typed-ipc/pull/75))
 
 ## [0.2.1](https://github.com/johncarmack1984/tauri-typed-ipc/compare/v0.2.0...v0.2.1) - 2026-11-04
 
