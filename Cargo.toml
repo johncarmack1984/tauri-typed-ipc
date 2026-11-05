@@ -16,13 +16,13 @@ tauri-typed-ipc-macros = { version = "=0.2.1", path = "tauri-typed-ipc-macros" }
 
 # Pinned exact through the rc churn; bump deliberately per release
 # until specta 2.0.0 stable.
-specta = "=2.0.0-rc.27"
-specta-typescript = "=0.0.14"
-specta-serde = "=0.0.14"
+specta = "=2.0.0-rc.28"
+specta-typescript = "=0.0.15"
+specta-serde = "=0.0.15"
 # Test-only: the Remapper consumer story for Bindings::map_datatypes.
-specta-util = "=0.0.14"
-# Opt-in `validate` feature only. specta-jsonschema pins the same rc.27 exact.
-specta-jsonschema = "=0.0.5"
+specta-util = "=0.0.15"
+# Opt-in `validate` feature only. specta-jsonschema pins the same rc.28 exact.
+specta-jsonschema = "=0.0.6"
 # default-features off: drops reqwest + TLS for remote $ref resolution, which
 # the self-contained contract does not need.
 jsonschema = { version = "0.29", default-features = false }

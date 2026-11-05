@@ -12,7 +12,7 @@ Three detached crates, each with its own lockfile:
 - `tauri-typed-ipc/` -- raw control arm + tauri-typed-ipc arm.
 - `taurpc/` -- raw control arm + taurpc arm.
 
-The split is forced: tauri-typed-ipc pins `specta = "=2.0.0-rc.27"` and taurpc 0.8.2 pins `=2.0.0-rc.25`, and those can't resolve in one graph. (taurpc 0.5.2's `=2.0.0-rc.22` forced it before; taurpc 0.8.2 and tauri-typed-ipc 0.1 shared rc.25, so for a while one graph could have held both.) The twins would stay split anyway, because the `raw_command` control arm and the published deltas are defined per binary; folding them into one binary is a deliberate methodology change, not a cleanup. Both twins pin identical tauri feature sets so the differences between them are the IPC layers, not tauri configuration.
+The split is forced: tauri-typed-ipc pins `specta = "=2.0.0-rc.28"` and taurpc 0.8.2 pins `=2.0.0-rc.25`, and those can't resolve in one graph. (taurpc 0.5.2's `=2.0.0-rc.22` forced it before; taurpc 0.8.2 and tauri-typed-ipc 0.1 shared rc.25, so for a while one graph could have held both.) The twins would stay split anyway, because the `raw_command` control arm and the published deltas are defined per binary; folding them into one binary is a deliberate methodology change, not a cleanup. Both twins pin identical tauri feature sets so the differences between them are the IPC layers, not tauri configuration.
 
 ## Runtime cost
 
