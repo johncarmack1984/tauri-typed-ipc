@@ -7,6 +7,9 @@
 //!   even when its trait is in another file), edits each file surgically (only
 //!   the changed spans, comments preserved), and lands the result as a single
 //!   commit on a fresh branch -- so the diff is reviewable and easy to drop.
+//! - `ttipc-migrate --help` and `ttipc-migrate --version` print the usage and
+//!   the version. Any other first argument that starts with `-` is a usage
+//!   error, never a file to read.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -15,17 +18,52 @@ use std::process::{Command, ExitCode};
 const BRANCH: &str = "ttipc-migration";
 const COMMIT_MESSAGE: &str = "migrate from taurpc to ttipc";
 
+const USAGE: &str = "\
+usage: ttipc-migrate <FILE.rs>
+       ttipc-migrate --write <FILE.rs>...";
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.split_first() {
+        Some((flag, _)) if matches!(flag.as_str(), "-h" | "--help") => {
+            print_help();
+            ExitCode::SUCCESS
+        }
+        Some((flag, _)) if matches!(flag.as_str(), "-V" | "--version") => {
+            println!("ttipc-migrate {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
         Some((flag, files)) if flag == "--write" => write_mode(files),
+        Some((flag, _)) if flag.starts_with('-') => {
+            eprintln!("ttipc-migrate: unknown option {flag}");
+            eprintln!("{USAGE}");
+            ExitCode::from(2)
+        }
         Some((path, [])) => preview_mode(path),
         _ => {
-            eprintln!("usage: ttipc-migrate <FILE.rs>");
-            eprintln!("       ttipc-migrate --write <FILE.rs>...");
+            eprintln!("{USAGE}");
             ExitCode::from(2)
         }
     }
+}
+
+/// `--help`: what each mode does, on stdout.
+fn print_help() {
+    println!(
+        "ttipc-migrate {version}
+{description}
+
+{USAGE}
+
+  <FILE.rs>             print one file's migrated source to stdout,
+                        leaving the file as it is
+  --write <FILE.rs>...  migrate the files in place, as one commit on a new
+                        {BRANCH} branch (the working tree must be clean)
+  -h, --help            print this help
+  -V, --version         print the version",
+        version = env!("CARGO_PKG_VERSION"),
+        description = env!("CARGO_PKG_DESCRIPTION"),
+    );
 }
 
 /// Single file -> stdout, original untouched.
