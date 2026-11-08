@@ -64,6 +64,52 @@ fn no_argument_is_a_usage_error() {
     );
 }
 
+#[test]
+fn help_prints_the_usage() {
+    for flag in ["--help", "-h"] {
+        let output = Command::new(BIN).arg(flag).output().expect("run bin");
+        assert!(
+            output.status.success(),
+            "{flag}: stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
+        assert!(
+            stdout.contains("ttipc-migrate --write <FILE.rs>..."),
+            "{flag}: got:\n{stdout}"
+        );
+    }
+}
+
+#[test]
+fn version_prints_the_crate_version() {
+    for flag in ["--version", "-V"] {
+        let output = Command::new(BIN).arg(flag).output().expect("run bin");
+        assert!(
+            output.status.success(),
+            "{flag}: stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(output.stdout)
+                .expect("utf8 stdout")
+                .trim(),
+            concat!("ttipc-migrate ", env!("CARGO_PKG_VERSION"))
+        );
+    }
+}
+
+#[test]
+fn an_unknown_option_is_a_usage_error() {
+    let output = Command::new(BIN).arg("--hlep").output().expect("run bin");
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unknown option --hlep") && !stderr.contains("cannot read"),
+        "stderr: {stderr}"
+    );
+}
+
 fn git(dir: &std::path::Path, args: &[&str]) {
     let ok = Command::new("git")
         .arg("-C")
