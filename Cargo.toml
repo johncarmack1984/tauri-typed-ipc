@@ -11,7 +11,6 @@ repository = "https://github.com/johncarmack1984/tauri-typed-ipc"
 homepage = "https://johncarmack.com"
 
 [workspace.dependencies]
-tauri-typed-ipc = { version = "=0.3.1", path = "tauri-typed-ipc" }
 tauri-typed-ipc-macros = { version = "=0.3.1", path = "tauri-typed-ipc-macros" }
 
 # Pinned exact through the rc churn; bump deliberately per release

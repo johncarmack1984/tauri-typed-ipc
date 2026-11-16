@@ -17,22 +17,35 @@ use ttipc_tests::{
 /// test here; an `async fn` would arrive as [`Dispatch::Async`].
 fn sync(dispatch: Dispatch) -> Result<Outcome, DispatchError> {
     match dispatch {
-        Dispatch::Sync(result) => result,
-        Dispatch::Async(_) => panic!("expected a synchronous dispatch"),
+        Dispatch::Sync(result) => Some(result),
+        Dispatch::Async(_) => None,
     }
+    .expect("expected a synchronous dispatch")
+}
+
+/// The pending half of a [`Dispatch`], for the async procedures under
+/// test here; a sync one would arrive as [`Dispatch::Sync`].
+fn pending(dispatch: Dispatch) -> impl Future<Output = Result<Outcome, DispatchError>> {
+    match dispatch {
+        Dispatch::Async(future) => Some(future),
+        Dispatch::Sync(_) => None,
+    }
+    .expect("an async procedure dispatches to a future")
 }
 
 #[test]
 fn dispatches_by_name() {
     assert_eq!(
-        sync(App.dispatch(&Context::empty(), "greet", json!({ "name": "world" }))).unwrap(),
+        sync(App.dispatch(&Context::empty(), "greet", json!({ "name": "world" })))
+            .expect("greet resolves"),
         Outcome::Resolve(json!("Hello, world!"))
     );
 }
 
 #[test]
 fn unknown_procedure_is_an_error() {
-    let err = sync(App.dispatch(&Context::empty(), "nope", json!({}))).unwrap_err();
+    let err = sync(App.dispatch(&Context::empty(), "nope", json!({})))
+        .expect_err("an unknown name fails");
     assert!(matches!(&err, DispatchError::UnknownProcedure(p) if p == "nope"));
 }
 
@@ -42,7 +55,8 @@ fn merge_routes_unknown_through_to_an_error() {
     // which owns no such name either -- so the merged set still reports
     // UnknownProcedure rather than silently swallowing the call.
     let merged = App.into_procedures().merge(Tally.into_procedures());
-    let err = sync(merged.dispatch(&Context::empty(), "nope", json!({}))).unwrap_err();
+    let err = sync(merged.dispatch(&Context::empty(), "nope", json!({})))
+        .expect_err("an unknown name fails");
     assert!(matches!(&err, DispatchError::UnknownProcedure(p) if p == "nope"));
 }
 
@@ -56,24 +70,28 @@ fn merge_chain_routes_each_set() {
         .merge(Service.into_procedures());
 
     assert_eq!(
-        sync(merged.dispatch(&Context::empty(), "greet", json!({ "name": "world" }))).unwrap(),
+        sync(merged.dispatch(&Context::empty(), "greet", json!({ "name": "world" })))
+            .expect("greet resolves"),
         Outcome::Resolve(json!("Hello, world!"))
     );
     assert_eq!(
-        sync(merged.dispatch(&Context::empty(), "count", json!({ "n": 41 }))).unwrap(),
+        sync(merged.dispatch(&Context::empty(), "count", json!({ "n": 41 })))
+            .expect("count resolves"),
         Outcome::Resolve(json!(42))
     );
     // The third set's `hits` reads managed state; a bare context carries
     // none, so it reaches that set's dispatch and fails with MissingState
     // -- proving the call routed past the first two, not a generic
     // UnknownProcedure.
-    let err = sync(merged.dispatch(&Context::empty(), "hits", json!({}))).unwrap_err();
+    let err = sync(merged.dispatch(&Context::empty(), "hits", json!({})))
+        .expect_err("hits fails without managed state");
     assert!(matches!(&err, DispatchError::MissingState(ty) if ty.contains("Hits")));
 }
 
 #[test]
 fn bad_arguments_are_an_error() {
-    let err = sync(App.dispatch(&Context::empty(), "greet", json!({}))).unwrap_err();
+    let err = sync(App.dispatch(&Context::empty(), "greet", json!({})))
+        .expect_err("missing arguments fail");
     assert!(matches!(err, DispatchError::Deserialize(_)));
 }
 
@@ -83,11 +101,13 @@ fn string_error_rejects_as_a_bare_string() {
     // on the wire (not a `{ type, message }` object), matching a raw `#[command]`.
     // The Ok path resolves normally.
     assert_eq!(
-        sync(NotesImpl.dispatch(&Context::empty(), "save", json!({ "note": "" }))).unwrap(),
+        sync(NotesImpl.dispatch(&Context::empty(), "save", json!({ "note": "" })))
+            .expect("save settles"),
         Outcome::Reject(json!("note is empty"))
     );
     assert_eq!(
-        sync(NotesImpl.dispatch(&Context::empty(), "save", json!({ "note": "hi" }))).unwrap(),
+        sync(NotesImpl.dispatch(&Context::empty(), "save", json!({ "note": "hi" })))
+            .expect("save settles"),
         Outcome::Resolve(json!(2))
     );
 }
@@ -103,32 +123,24 @@ fn context_extracts_by_type() {
 
 #[test]
 fn missing_injection_is_an_error() {
-    let err =
-        sync(App.dispatch(&Context::empty(), "greet_via", json!({ "name": "world" }))).unwrap_err();
+    let err = sync(App.dispatch(&Context::empty(), "greet_via", json!({ "name": "world" })))
+        .expect_err("greet_via fails without an app handle");
     assert!(matches!(err, DispatchError::MissingInjection(ty) if ty.contains("AppHandle")));
 }
 
 #[test]
 fn async_procedure_resolves() {
     let set = Vault.into_procedures();
-    let Dispatch::Async(future) =
-        set.dispatch(&Context::empty(), "snapshot", json!({ "label": "x" }))
-    else {
-        panic!("an async procedure dispatches to a future");
-    };
-    let outcome = tauri::async_runtime::block_on(future).unwrap();
+    let future = pending(set.dispatch(&Context::empty(), "snapshot", json!({ "label": "x" })));
+    let outcome = tauri::async_runtime::block_on(future).expect("snapshot settles");
     assert_eq!(outcome, Outcome::Resolve(json!("snapshot: x")));
 }
 
 #[test]
 fn async_result_ok_resolves() {
     let set = Vault.into_procedures();
-    let Dispatch::Async(future) =
-        set.dispatch(&Context::empty(), "try_snapshot", json!({ "label": "x" }))
-    else {
-        panic!("an async procedure dispatches to a future");
-    };
-    let outcome = tauri::async_runtime::block_on(future).unwrap();
+    let future = pending(set.dispatch(&Context::empty(), "try_snapshot", json!({ "label": "x" })));
+    let outcome = tauri::async_runtime::block_on(future).expect("try_snapshot settles");
     assert_eq!(outcome, Outcome::Resolve(json!("ok: x")));
 }
 
@@ -137,12 +149,8 @@ fn async_result_err_rejects_typed_error() {
     // An empty label returns `Err(BackupError::Empty)`, which rejects
     // with the typed error's wire shape -- not a DispatchError string.
     let set = Vault.into_procedures();
-    let Dispatch::Async(future) =
-        set.dispatch(&Context::empty(), "try_snapshot", json!({ "label": "" }))
-    else {
-        panic!("an async procedure dispatches to a future");
-    };
-    let outcome = tauri::async_runtime::block_on(future).unwrap();
+    let future = pending(set.dispatch(&Context::empty(), "try_snapshot", json!({ "label": "" })));
+    let outcome = tauri::async_runtime::block_on(future).expect("try_snapshot settles");
     assert_eq!(
         outcome,
         Outcome::Reject(json!({ "type": "empty", "message": "the label is empty" }))
@@ -206,7 +214,7 @@ fn channel_dispatch_streams_sends() {
         "track",
         json!({ "total": 2, "progress": "__CHANNEL__:0" }),
     ))
-    .unwrap();
+    .expect("track settles");
     assert_eq!(outcome, Outcome::Resolve(json!(null)));
     assert_eq!(
         recorded_json(&recorded),
@@ -225,14 +233,12 @@ fn channel_dispatch_streams_from_async() {
     let (recorded, channels) = recording_channels();
     let ctx = Context::empty().with_channels(&channels);
     let set = Downloader.into_procedures();
-    let Dispatch::Async(future) = set.dispatch(
+    let future = pending(set.dispatch(
         &ctx,
         "track_async",
         json!({ "total": 2, "progress": "__CHANNEL__:0" }),
-    ) else {
-        panic!("track_async is async");
-    };
-    let outcome = tauri::async_runtime::block_on(future).unwrap();
+    ));
+    let outcome = tauri::async_runtime::block_on(future).expect("track_async settles");
     assert_eq!(outcome, Outcome::Resolve(json!(null)));
     assert_eq!(
         recorded_json(&recorded),
@@ -254,6 +260,6 @@ fn missing_channel_factory_is_an_error() {
         "track",
         json!({ "total": 1, "progress": "__CHANNEL__:0" }),
     ))
-    .unwrap_err();
+    .expect_err("track fails without a channel factory");
     assert!(matches!(err, DispatchError::MissingChannel(ty) if ty.contains("Channel")));
 }

@@ -18,6 +18,8 @@ export const scenes = {
 
 /**  A saved lighting scene: a name and one level per channel. */
 export type Scene = {
+	/**  The scene's name. */
 	name: string,
+	/**  One level per channel, in channel order. */
 	levels: number[],
 };

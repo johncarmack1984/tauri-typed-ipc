@@ -11,7 +11,9 @@ use ttipc::procedures;
 /// fixture names the mock runtime's handle type explicitly.
 #[procedures]
 pub trait Greeter {
+    /// Greets `name`.
     fn greet(&self, name: String) -> String;
+    /// Greets `name`, taking the injected app handle.
     fn greet_via(&self, app: AppHandle<MockRuntime>, name: String) -> String;
 }
 
@@ -22,37 +24,46 @@ pub trait Greeter {
 /// bindings are read off the generated `FadersProcedures` descriptor.
 #[procedures]
 pub trait Faders {
+    /// Sets `channel` to `value`.
     fn set(&self, app: AppHandle<MockRuntime>, channel: u16, value: u8);
+    /// The level of `channel`.
     fn level(&self, channel: u16) -> u8;
+    /// Names `channel`, returning its label.
     fn label(&self, channel: u16, name: String) -> String;
 }
 
-// Multi-word method and argument names for the client-casing tests:
-// the wire command and arg keys stay the snake_case Rust idents, only
-// the TypeScript identifiers get cased. No impl needed -- the bindings
-// read the generated descriptor.
+/// Multi-word method and argument names for the client-casing tests:
+/// the wire command and arg keys stay the snake_case Rust idents, only
+/// the TypeScript identifiers get cased. No impl needed -- the bindings
+/// read the generated descriptor.
 #[procedures]
 pub trait Mixer {
+    /// Sets `channel_number` to `new_value`.
     fn set_channel(&self, channel_number: u16, new_value: u8);
 }
 
-// A custom wire type passed both ways by `Scenes`: proves named types
-// reach the client as `export type` definitions and are referenced (not
-// inlined) in command signatures, that Rust doc comments flow to TS,
-// and -- living in a submodule -- that the Files layout gives it its
-// own file.
+/// A custom wire type passed both ways by `Scenes`: proves named types
+/// reach the client as `export type` definitions and are referenced (not
+/// inlined) in command signatures, that Rust doc comments flow to TS,
+/// and -- living in a submodule -- that the Files layout gives it its
+/// own file.
 pub mod scene {
     /// A saved lighting scene: a name and one level per channel.
     #[derive(serde::Serialize, serde::Deserialize, specta::Type)]
     pub struct Scene {
+        /// The scene's name.
         pub name: String,
+        /// One level per channel, in channel order.
         pub levels: Vec<u8>,
     }
 }
 
+/// Saves and loads a [`scene::Scene`], passing the named type both ways.
 #[procedures]
 pub trait Scenes {
+    /// Saves `scene`.
     fn save(&self, scene: scene::Scene);
+    /// Loads the scene called `name`.
     fn load(&self, name: String) -> scene::Scene;
 }
 
@@ -61,7 +72,13 @@ pub trait Scenes {
 /// derive's emit tests; the listener half becomes generated bindings.
 #[derive(ttipc::Event)]
 pub enum FaderEvent {
-    Changed { channel: u16, value: u8 },
+    /// A fader moved.
+    Changed {
+        /// The fader's channel.
+        channel: u16,
+        /// Its new value.
+        value: u8,
+    },
 }
 
 /// Single-payload events: a tuple variant `V(T)` carries an arbitrary `T`
@@ -70,9 +87,16 @@ pub enum FaderEvent {
 /// variants to prove all three coexist.
 #[derive(ttipc::Event)]
 pub enum SignalEvent {
+    /// The rig is ready.
     Ready,
-    Progress { done: u32 },
+    /// Work is under way.
+    Progress {
+        /// Steps done so far.
+        done: u32,
+    },
+    /// A status code.
     Code(u32),
+    /// A batch of status codes.
     Batch(Vec<u32>),
 }
 
@@ -81,15 +105,21 @@ pub enum SignalEvent {
 /// `posts.event.on(cb)` (the taurpc shape).
 #[derive(ttipc::Event)]
 pub enum PostsEvent {
-    Updated { id: u32 },
+    /// A post changed.
+    Updated {
+        /// The post's id.
+        id: u32,
+    },
 }
 
 /// A wire error for the Error derive tests: a tuple variant and a unit
 /// variant, each serializing to `{ type, message }`.
 #[derive(Debug, thiserror::Error, ttipc::Error)]
 pub enum DeskError {
+    /// The channel is past the desk's last channel.
     #[error("channel {0} is out of range")]
     OutOfRange(u16),
+    /// The desk takes no changes while locked.
     #[error("the desk is locked")]
     Locked,
 }
@@ -100,7 +130,9 @@ pub enum DeskError {
 /// no `@throws`). No impl needed -- the bindings read the descriptor.
 #[procedures]
 pub trait Guarded {
+    /// Stores `value` on `channel`, or rejects with a [`DeskError`].
     fn store(&self, channel: u16, value: u8) -> Result<(), DeskError>;
+    /// The value on `channel`.
     fn peek(&self, channel: u16) -> u8;
 }
 
@@ -110,10 +142,13 @@ pub trait Guarded {
 /// as the built-in `string`. The impl drives the dispatch wire-parity test.
 #[procedures]
 pub trait Notes {
+    /// Saves `note` and returns its length, or rejects with a message.
     fn save(&self, note: String) -> Result<u8, String>;
+    /// The number of saved notes.
     fn count(&self) -> u8;
 }
 
+/// Owner of the [`Notes`] set.
 pub struct NotesImpl;
 
 impl Notes for NotesImpl {
@@ -148,6 +183,7 @@ impl Greeter for App {
 /// trait (no `into_procedures` ambiguity).
 #[procedures]
 pub trait Counter {
+    /// The number after `n`.
     fn count(&self, n: u32) -> u32;
 }
 
@@ -166,6 +202,7 @@ impl Counter for Tally {
 /// `tags.list`, so they coexist and route by namespace.
 #[procedures(namespace = "posts")]
 pub trait Posts {
+    /// Lists the posts.
     fn list(&self) -> u32;
 }
 
@@ -178,9 +215,11 @@ impl Posts for PostStore {
     }
 }
 
-// `path` is taurpc's spelling, an accepted alias for `namespace`.
+/// The `tags` set. `path` is taurpc's spelling, an accepted alias for
+/// `namespace`.
 #[procedures(path = "tags")]
 pub trait Tags {
+    /// Lists the tags.
     fn list(&self) -> u32;
 }
 
@@ -204,6 +243,7 @@ pub struct Hits(pub u32);
 /// implements exactly one trait.
 #[procedures]
 pub trait Counted {
+    /// The managed [`Hits`] count.
     fn hits(&self, state: tauri::State<'_, Hits>) -> u32;
 }
 
@@ -222,7 +262,9 @@ impl Counted for Service {
 /// receiver and the spawn path; the `Result` arm drives `Outcome::Reject`.
 #[procedures]
 pub trait Backup {
+    /// Takes a snapshot called `label`.
     async fn snapshot(&self, label: String) -> String;
+    /// Takes a snapshot called `label`, or rejects with a [`BackupError`].
     async fn try_snapshot(&self, label: String) -> Result<String, BackupError>;
 }
 
@@ -247,6 +289,7 @@ impl Backup for Vault {
 /// `{ type, message }` like any [`ttipc::Error`].
 #[derive(Debug, thiserror::Error, ttipc::Error)]
 pub enum BackupError {
+    /// The snapshot's label was empty.
     #[error("the label is empty")]
     Empty,
 }
@@ -258,6 +301,7 @@ pub enum BackupError {
 /// state implements exactly one trait.
 #[procedures]
 pub trait CountedAsync {
+    /// The managed [`Hits`] count, read inside the spawned future.
     async fn hits_async(&self, state: tauri::State<'_, Hits>) -> u32;
 }
 
@@ -276,6 +320,7 @@ impl CountedAsync for ServiceAsync {
 /// real (mock) handle for the type-matched extraction to find.
 #[procedures]
 pub trait StampedAsync {
+    /// Stamps `label` with the number of webview windows the handle sees.
     async fn stamp(&self, app: tauri::AppHandle<tauri::test::MockRuntime>, label: String)
     -> String;
 }
@@ -299,7 +344,9 @@ impl StampedAsync for PressAsync {
 /// `Channel<Progress>` carries back to the caller.
 #[derive(serde::Serialize, specta::Type)]
 pub struct Progress {
+    /// Steps done so far.
     pub done: u32,
+    /// Steps in all.
     pub total: u32,
 }
 
@@ -311,7 +358,9 @@ pub struct Progress {
 /// spawned future.
 #[procedures]
 pub trait Downloads {
+    /// Sends `total` progress updates over `progress`.
     fn track(&self, total: u32, progress: ttipc::Channel<Progress>);
+    /// Sends `total` progress updates over `progress` from the spawned future.
     async fn track_async(&self, total: u32, progress: ttipc::Channel<Progress>);
 }
 
@@ -323,6 +372,7 @@ pub trait Downloads {
 /// export instead.
 #[derive(serde::Serialize, serde::Deserialize, specta::Type)]
 pub struct Patch {
+    /// An optional note, left off the wire when `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }
@@ -332,6 +382,7 @@ pub struct Patch {
 /// impl needed -- the binding test only reads the descriptor.
 #[procedures]
 pub trait Patches {
+    /// Applies `patch` and returns the result.
     fn apply(&self, patch: Patch) -> Patch;
 }
 
@@ -343,6 +394,7 @@ pub trait Patches {
 /// it is post-0.1.
 #[procedures]
 pub trait Ledger {
+    /// The balance of `account`.
     fn balance(&self, account: u64) -> i64;
 }
 
