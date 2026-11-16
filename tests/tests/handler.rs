@@ -55,11 +55,10 @@ impl Locker for Bolt {
 /// deserialized values.
 fn json_bytes(body: InvokeResponseBody) -> String {
     match body {
-        InvokeResponseBody::Json(s) => s,
-        InvokeResponseBody::Raw(bytes) => {
-            panic!("expected a JSON body, got {} raw bytes", bytes.len())
-        }
+        InvokeResponseBody::Json(s) => Ok(s),
+        InvokeResponseBody::Raw(bytes) => Err(format!("{} raw bytes", bytes.len())),
     }
+    .expect("expected a JSON body")
 }
 
 #[test]
@@ -333,6 +332,10 @@ trait Crasher {
 struct Bomb;
 
 impl Crasher for Bomb {
+    #[expect(
+        clippy::panic,
+        reason = "the test needs a procedure whose future panics"
+    )]
     async fn boom(&self) -> u32 {
         panic!("boom inside the spawned future")
     }
@@ -357,9 +360,11 @@ fn async_panic_neither_resolves_nor_rejects() {
     // bounded `recv_timeout` returns an error instead of `Ok`. Asserts the
     // non-settlement without hanging the test.
     let set = Bomb.into_procedures();
-    let Dispatch::Async(future) = set.dispatch(&Context::empty(), "boom", json!({})) else {
-        panic!("boom is async");
-    };
+    let future = match set.dispatch(&Context::empty(), "boom", json!({})) {
+        Dispatch::Async(future) => Some(future),
+        Dispatch::Sync(_) => None,
+    }
+    .expect("boom is async");
 
     let (tx, rx) = mpsc::sync_channel::<()>(1);
     tauri::async_runtime::spawn(async move {
@@ -438,9 +443,10 @@ fn wire_bytes_match_a_raw_command() {
         "track",
         json!({ "total": 2, "progress": "__CHANNEL__:0" }),
     );
-    let Dispatch::Sync(Ok(_)) = outcome else {
-        panic!("track resolves synchronously");
-    };
+    assert!(
+        matches!(outcome, Dispatch::Sync(Ok(_))),
+        "track resolves synchronously"
+    );
 
     // The same two values streamed through a raw tauri channel.
     let raw_sent: Arc<std::sync::Mutex<Vec<InvokeResponseBody>>> =

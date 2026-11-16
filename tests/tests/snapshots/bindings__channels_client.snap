@@ -21,6 +21,8 @@ export const downloads = {
  *  `Channel<Progress>` carries back to the caller.
  */
 export type Progress = {
+	/**  Steps done so far. */
 	done: number,
+	/**  Steps in all. */
 	total: number,
 };

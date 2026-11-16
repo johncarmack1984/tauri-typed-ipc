@@ -22,5 +22,6 @@ export const patches = {
  *  export instead.
  */
 export type Patch = {
+	/**  An optional note, left off the wire when `None`. */
 	note?: string | null,
 };
